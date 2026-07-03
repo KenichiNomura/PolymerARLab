@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#101211" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Polymer AR Lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #101211;
+        color: #f7f3e8;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #101211;
+      }
+
+      body {
+        min-width: 320px;
+      }
+
+      button,
+      select,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      select,
+      textarea {
+        min-height: 36px;
+        border: 1px solid rgba(247, 243, 232, 0.22);
+        border-radius: 6px;
+        background: rgba(247, 243, 232, 0.1);
+        color: #f7f3e8;
+      }
+
+      button {
+        cursor: pointer;
+        padding: 0 12px;
+        white-space: nowrap;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+
+      select {
+        width: 100%;
+        padding: 0 10px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 76px;
+        padding: 9px 10px;
+        resize: vertical;
+        line-height: 1.35;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: #44c7d8;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #36b37e;
+      }
+
+      #cameraFeed {
+        position: fixed;
+        inset: 0;
+        display: none;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        background: #070807;
+        z-index: 0;
+      }
+
+      body.camera-active #cameraFeed {
+        display: block;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+      }
+
+      #app canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      #fallbackMolecule {
+        position: fixed;
+        inset: 92px 24px 260px;
+        z-index: 2;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      body.webgl-fallback #fallbackMolecule,
+      #fallbackMolecule.camera-overlay {
+        display: flex;
+      }
+
+      #fallbackMolecule svg {
+        width: min(100%, 900px);
+        height: min(100%, 320px);
+        overflow: visible;
+      }
+
+      #fallbackMolecule text {
+        fill: #101211;
+        font: 700 11px/1 system-ui, sans-serif;
+        text-anchor: middle;
+        pointer-events: none;
+      }
+
+      .topbar {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        left: max(12px, env(safe-area-inset-left));
+        right: max(12px, env(safe-area-inset-right));
+        z-index: 12;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: start;
+        pointer-events: none;
+      }
+
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        pointer-events: auto;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: clamp(18px, 2.4vw, 28px);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .brand span {
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      #arEntry {
+        display: flex;
+        justify-content: flex-end;
+        min-width: 132px;
+        pointer-events: auto;
+      }
+
+      #webxrArButton {
+        position: static !important;
+        width: auto !important;
+        min-width: 128px !important;
+        height: 40px !important;
+        margin: 0 !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(68, 199, 216, 0.7) !important;
+        background: rgba(30, 74, 74, 0.9) !important;
+        color: #f7f3e8 !important;
+        font: 700 12px/1 system-ui, sans-serif !important;
+      }
+
+      .control-panel {
+        position: fixed;
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 11;
+        width: min(430px, calc(100vw - 24px));
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid rgba(247, 243, 232, 0.16);
+        border-radius: 8px;
+        background: rgba(16, 18, 17, 0.88);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+        backdrop-filter: blur(18px);
+      }
+
+      .field {
+        display: grid;
+        gap: 5px;
+      }
+
+      .field label,
+      .toggle label {
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .range-row,
+      .button-row,
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mode-toggle {
+        justify-content: space-between;
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid rgba(247, 243, 232, 0.16);
+        border-radius: 6px;
+        background: rgba(247, 243, 232, 0.07);
+      }
+
+      .range-row span {
+        min-width: 28px;
+        text-align: right;
+        color: #f2b84b;
+        font-weight: 800;
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .button-row button {
+        min-width: 0;
+        padding: 0 8px;
+      }
+
+      .summary {
+        min-height: 43px;
+        padding: 9px 10px;
+        border-radius: 6px;
+        background: rgba(247, 243, 232, 0.08);
+        color: rgba(247, 243, 232, 0.88);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-line;
+      }
+
+      .control-section {
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid rgba(247, 243, 232, 0.14);
+        border-radius: 8px;
+        background: rgba(247, 243, 232, 0.045);
+      }
+
+      .control-section:not([open]) {
+        gap: 0;
+      }
+
+      .control-section > summary {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        list-style: none;
+        text-transform: uppercase;
+      }
+
+      .control-section > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .control-section > summary::after {
+        content: "+";
+        color: rgba(247, 243, 232, 0.58);
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .control-section[open] > summary {
+        color: #f7f3e8;
+      }
+
+      .control-section[open] > summary::after {
+        content: "-";
+        color: #ffd166;
+      }
+
+      .inline-section {
+        display: grid;
+        gap: 0;
+        border: 1px solid rgba(247, 243, 232, 0.12);
+        border-radius: 6px;
+        background: rgba(7, 8, 7, 0.22);
+      }
+
+      .inline-section[open] {
+        gap: 8px;
+      }
+
+      .inline-section summary {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 10px;
+        color: rgba(247, 243, 232, 0.76);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        list-style: none;
+        text-transform: uppercase;
+      }
+
+      .inline-section summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .inline-section summary::after {
+        content: "+";
+        color: rgba(247, 243, 232, 0.58);
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .inline-section[open] summary::after {
+        content: "-";
+        color: #ffd166;
+      }
+
+      .inline-section-body {
+        display: grid;
+        gap: 8px;
+        padding: 0 10px 10px;
+      }
+
+      body:not(.polymer-mode) .polymer-only {
+        display: none;
+      }
+
+      .section-body {
+        display: grid;
+        gap: 8px;
+        padding-top: 8px;
+      }
+
+      .import-grid,
+      .import-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+
+      .example-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+
+      .attachment-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .attachment-grid label {
+        display: grid;
+        gap: 5px;
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      #importStatus {
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .scan-strip {
+        position: fixed;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 10;
+        width: min(300px, calc(100vw - 24px));
+        display: grid;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid rgba(247, 243, 232, 0.14);
+        border-radius: 8px;
+        background: rgba(16, 18, 17, 0.82);
+        backdrop-filter: blur(18px);
+      }
+
+      #scanPreview {
+        height: 98px;
+        border: 1px dashed rgba(247, 243, 232, 0.2);
+        border-radius: 6px;
+        background:
+          linear-gradient(135deg, rgba(54, 179, 126, 0.16), rgba(68, 199, 216, 0.1)),
+          rgba(247, 243, 232, 0.06);
+        background-position: center;
+        background-size: cover;
+      }
+
+      #scanPreview.has-capture {
+        border-style: solid;
+      }
+
+      #scanStatus,
+      #mobileStatus,
+      #platformStatus,
+      #validationStatus {
+        color: rgba(247, 243, 232, 0.72);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      #mobileStatus {
+        min-height: 30px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: rgba(68, 199, 216, 0.08);
+      }
+
+      #mobileStatus.is-warning {
+        color: #ffd166;
+        background: rgba(242, 184, 75, 0.12);
+      }
+
+      #platformStatus {
+        position: fixed;
+        left: 50%;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        z-index: 9;
+        width: min(420px, calc(100vw - 24px));
+        transform: translateX(-50%);
+        padding: 9px 12px;
+        border: 1px solid rgba(247, 243, 232, 0.12);
+        border-radius: 8px;
+        background: rgba(16, 18, 17, 0.78);
+        text-align: center;
+        backdrop-filter: blur(14px);
+      }
+
+      #scanCanvas {
+        display: none;
+      }
+
+      @media (max-width: 900px) {
+        .topbar {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        #arEntry {
+          justify-content: flex-start;
+        }
+
+        .control-panel {
+          right: max(12px, env(safe-area-inset-right));
+          width: auto;
+          max-width: none;
+        }
+
+        .scan-strip {
+          display: none;
+        }
+
+        #platformStatus {
+          display: none;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .brand span {
+          display: none;
+        }
+
+        .control-panel {
+          max-height: 54vh;
+          overflow: auto;
+          padding: 10px;
+        }
+
+        .button-row {
+          grid-template-columns: 1fr;
+        }
+
+        .import-grid,
+        .import-actions,
+        .example-grid,
+        .attachment-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .button-row button:last-child {
+          grid-column: auto;
+        }
+
+        .summary,
+        #mobileStatus,
+        #validationStatus {
+          font-size: 11px;
+        }
+
+        #fallbackMolecule {
+          inset: 96px 8px 390px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <video id="cameraFeed" autoplay muted playsinline></video>
+    <div id="app"></div>
+    <div id="fallbackMolecule"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <h1>Polymer AR Lab</h1>
+        <span>Graph-based repeat units with explicit bond orders</span>
+      </div>
+      <div id="arEntry"></div>
+    </header>
+
+    <main class="control-panel" aria-label="Structure controls">
+      <details class="control-section" open>
+        <summary>Structure</summary>
+        <div class="section-body">
+          <div class="toggle mode-toggle">
+            <label for="polymerModeToggle">Polymer repeat unit</label>
+            <input id="polymerModeToggle" type="checkbox" />
+          </div>
+
+          <div class="example-grid">
+            <select id="exampleStructureSelect" aria-label="Example structures"></select>
+          </div>
+          <select id="polymerSelect" hidden aria-hidden="true"></select>
+
+          <div class="field polymer-only">
+            <label for="repeatRange">Repeats</label>
+            <div class="range-row">
+              <input id="repeatRange" type="range" min="1" max="12" value="4" />
+              <span id="repeatValue">4</span>
+            </div>
+          </div>
+
+          <details id="structureImportPanel" class="inline-section">
+            <summary>Import custom structure</summary>
+            <div class="inline-section-body">
+              <div class="import-grid">
+                <select id="structureFormat" aria-label="Structure format">
+                  <option value="auto">Auto format</option>
+                  <option value="smiles">SMILES</option>
+                  <option value="molfile">Molfile</option>
+                  <option value="json">Graph JSON</option>
+                </select>
+                <button id="loadStructureBtn" type="button">Import</button>
+              </div>
+              <textarea id="structureInput" rows="4" spellcheck="false" placeholder="SMILES, Molfile, or graph JSON"></textarea>
+              <div class="attachment-grid polymer-only">
+                <label for="leftAttachmentSelect">
+                  Start atom
+                  <select id="leftAttachmentSelect" disabled></select>
+                </label>
+                <label for="rightAttachmentSelect">
+                  End atom
+                  <select id="rightAttachmentSelect" disabled></select>
+                </label>
+              </div>
+            </div>
+          </details>
+          <div id="importStatus">Template library active.</div>
+
+        </div>
+      </details>
+
+      <details class="control-section">
+        <summary>View and AR</summary>
+        <div class="section-body">
+          <div class="button-row">
+            <button id="cameraModeBtn" type="button">Camera AR</button>
+            <button id="captureBtn" type="button" disabled>Capture</button>
+            <button id="resetViewBtn" type="button">Reset view</button>
+          </div>
+
+          <div class="toggle">
+            <input id="labelsToggle" type="checkbox" />
+            <label for="labelsToggle">Atom labels</label>
+          </div>
+        </div>
+      </details>
+
+      <details class="control-section" open>
+        <summary>Status</summary>
+        <div class="section-body">
+          <div id="structureSummary" class="summary"></div>
+          <div id="mobileStatus"></div>
+          <div id="validationStatus"></div>
+        </div>
+      </details>
+    </main>
+
+    <aside class="scan-strip" aria-label="Sketch scan">
+      <div id="scanPreview"></div>
+      <div id="scanStatus">Sketch capture standby.</div>
+    </aside>
+
+    <div id="platformStatus"></div>
+    <canvas id="scanCanvas"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
