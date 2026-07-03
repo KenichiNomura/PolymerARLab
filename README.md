@@ -1,5 +1,8 @@
 # Polymer AR Lab
 
+> **Active development notice:** This app is still under active development. If
+> you want to try it, use it at your own risk.
+
 Polymer AR Lab is a browser-based molecular viewer for classroom molecule and
 polymer visualization. It runs as a static Vite app with Three.js rendering,
 browser-side RDKit.js validation, VSEPR geometry cleanup, and mobile AR
