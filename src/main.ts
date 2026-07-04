@@ -15,7 +15,7 @@ import {
   type TemplateAtom,
 } from "./polymerData";
 import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./rdkitService";
-import { importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
+import { IMPORTED_TEMPLATE_ID, importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
 interface ThreeRuntime {
@@ -77,7 +77,6 @@ let currentGraph: MolecularGraph | null = null;
 let cameraStream: MediaStream | null = null;
 let three: ThreeRuntime | null = null;
 
-const IMPORTED_TEMPLATE_ID = "imported-structure";
 type StructureMode = "molecule" | "polymer";
 
 interface BaseStructureExample {
@@ -334,7 +333,7 @@ async function useSelectedExample() {
   if (example.kind === "template") {
     const template = getTemplate(example.templateId);
     polymerSelect.value = template.id;
-    repeatRange.value = String(Math.min(template.maxRepeats, Math.max(1, Math.round(example.repeats))));
+    repeatRange.value = String(clampRepeats(example.repeats, template.maxRepeats));
     pendingExampleRepeatCount = null;
     rebuildGraph();
     setImportStatus(`Loaded example: ${template.shortName} - ${template.name}.`);
@@ -388,11 +387,15 @@ async function loadImportedStructure() {
   }
 }
 
+function clampRepeats(value: number, max: number) {
+  return Math.min(max, Math.max(1, Math.round(value)));
+}
+
 function applyExampleRepeatCount(template: PolymerTemplate): PolymerTemplate {
   if (pendingExampleRepeatCount == null) return template;
   return {
     ...template,
-    defaultRepeats: Math.min(template.maxRepeats, Math.max(1, Math.round(pendingExampleRepeatCount))),
+    defaultRepeats: clampRepeats(pendingExampleRepeatCount, template.maxRepeats),
   };
 }
 
@@ -466,10 +469,9 @@ function rebuildGraph() {
     polymerSelect.value = POLYMER_TEMPLATES[0].id;
   }
   const activeTemplate = getActiveTemplate(polymerSelect.value);
-  const geometryCleanup = cleanupTemplateGeometry(activeTemplate, {
+  currentTemplate = cleanupTemplateGeometry(activeTemplate, {
     mode: isPolymerMode() ? "polymer" : "molecule",
   });
-  currentTemplate = geometryCleanup.template;
   repeatRange.max = String(currentTemplate.maxRepeats);
   if (Number(repeatRange.value) > currentTemplate.maxRepeats) {
     repeatRange.value = String(currentTemplate.maxRepeats);

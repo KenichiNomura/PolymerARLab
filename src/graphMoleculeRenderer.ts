@@ -5,37 +5,18 @@ import type { BondOrder, GraphAtom, GraphBond, MolecularGraph } from "./polymerD
 const ATOM_SCALE = 0.38;
 const BOND_RADIUS = 0.055;
 const MULTI_BOND_SPACING = 0.105;
+const HIGHLIGHT_COLOR = 0xffd166;
+const HIGHLIGHT_EMISSIVE = 0x2b2108;
 
 function graphPosition(atom: GraphAtom): THREE.Vector3 {
   return new THREE.Vector3(atom.position[0], atom.position[1], atom.position[2]);
 }
 
-function materialForElement(symbol: string, highlighted: boolean) {
-  const info = getElementInfo(symbol);
-  return new THREE.MeshStandardMaterial({
-    color: highlighted ? 0xffd166 : info.color,
-    roughness: 0.44,
-    metalness: 0.04,
-    emissive: highlighted ? 0x2b2108 : 0x000000,
-  });
-}
-
-function materialForBond(order: BondOrder, highlighted: boolean) {
-  const color = highlighted
-    ? 0xffd166
-    : order === "aromatic"
-      ? 0xe6a23c
-      : order === 2
-        ? 0xd9edf2
-        : order === 3
-          ? 0x7fc7ff
-          : 0xd8d3c8;
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.52,
-    metalness: 0.03,
-    emissive: highlighted ? 0x2b2108 : 0x000000,
-  });
+function bondColor(order: BondOrder) {
+  if (order === "aromatic") return 0xe6a23c;
+  if (order === 2) return 0xd9edf2;
+  if (order === 3) return 0x7fc7ff;
+  return 0xd8d3c8;
 }
 
 function labelTexture(text: string) {
@@ -43,7 +24,6 @@ function labelTexture(text: string) {
   canvas.width = 128;
   canvas.height = 64;
   const context = canvas.getContext("2d")!;
-  context.clearRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "rgba(13, 16, 15, 0.76)";
   context.strokeStyle = "rgba(255, 255, 255, 0.34)";
   context.lineWidth = 2;
@@ -85,9 +65,12 @@ export class GraphMoleculeRenderer {
   private highlightedTemplateGroupId: string | null = null;
   private labelsVisible = true;
   private cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 12, 1);
+  // Geometry, material, and label-sprite resources are shared across atoms/bonds
+  // and across rebuilds (the repeats slider rebuilds on every input event).
   private sphereGeometryBySymbol = new Map<string, THREE.SphereGeometry>();
-  private createdMaterials: THREE.Material[] = [];
-  private createdTextures: THREE.Texture[] = [];
+  private atomMaterials = new Map<string, THREE.MeshStandardMaterial>();
+  private bondMaterials = new Map<string, THREE.MeshStandardMaterial>();
+  private spriteMaterials = new Map<string, THREE.SpriteMaterial>();
 
   constructor() {
     this.group.add(this.labels);
@@ -97,7 +80,16 @@ export class GraphMoleculeRenderer {
     this.clear();
     this.cylinderGeometry.dispose();
     for (const geometry of this.sphereGeometryBySymbol.values()) geometry.dispose();
+    for (const material of this.atomMaterials.values()) material.dispose();
+    for (const material of this.bondMaterials.values()) material.dispose();
+    for (const material of this.spriteMaterials.values()) {
+      material.map?.dispose();
+      material.dispose();
+    }
     this.sphereGeometryBySymbol.clear();
+    this.atomMaterials.clear();
+    this.bondMaterials.clear();
+    this.spriteMaterials.clear();
   }
 
   setLabelsVisible(visible: boolean) {
@@ -151,10 +143,54 @@ export class GraphMoleculeRenderer {
       if (!keep.has(child)) this.group.remove(child);
     }
     for (const child of [...this.labels.children]) this.labels.remove(child);
-    for (const material of this.createdMaterials) material.dispose();
-    for (const texture of this.createdTextures) texture.dispose();
-    this.createdMaterials = [];
-    this.createdTextures = [];
+  }
+
+  private atomMaterial(symbol: string, highlighted: boolean) {
+    const key = `${symbol}|${highlighted}`;
+    let material = this.atomMaterials.get(key);
+    if (!material) {
+      material = new THREE.MeshStandardMaterial({
+        color: highlighted ? HIGHLIGHT_COLOR : getElementInfo(symbol).color,
+        roughness: 0.44,
+        metalness: 0.04,
+        emissive: highlighted ? HIGHLIGHT_EMISSIVE : 0x000000,
+      });
+      this.atomMaterials.set(key, material);
+    }
+    return material;
+  }
+
+  private bondMaterial(order: BondOrder, highlighted: boolean, inner = false) {
+    const key = `${order}|${highlighted}|${inner}`;
+    let material = this.bondMaterials.get(key);
+    if (!material) {
+      material = new THREE.MeshStandardMaterial({
+        color: highlighted ? HIGHLIGHT_COLOR : bondColor(order),
+        roughness: 0.52,
+        metalness: 0.03,
+        emissive: highlighted ? HIGHLIGHT_EMISSIVE : 0x000000,
+      });
+      if (inner) {
+        material.opacity = 0.78;
+        material.transparent = true;
+      }
+      this.bondMaterials.set(key, material);
+    }
+    return material;
+  }
+
+  private spriteMaterial(text: string) {
+    let material = this.spriteMaterials.get(text);
+    if (!material) {
+      material = new THREE.SpriteMaterial({
+        map: labelTexture(text),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.spriteMaterials.set(text, material);
+    }
+    return material;
   }
 
   private addAtom(graphAtom: GraphAtom, highlighted: boolean) {
@@ -165,31 +201,19 @@ export class GraphMoleculeRenderer {
       this.sphereGeometryBySymbol.set(graphAtom.element, geometry);
     }
 
-    const material = materialForElement(graphAtom.element, highlighted);
-    this.createdMaterials.push(material);
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(geometry, this.atomMaterial(graphAtom.element, highlighted));
     mesh.position.fromArray(graphAtom.position);
     mesh.userData.atom = graphAtom;
     this.group.add(mesh);
 
-    const texture = labelTexture(graphAtom.element);
-    this.createdTextures.push(texture);
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-    this.createdMaterials.push(spriteMaterial);
-    const sprite = new THREE.Sprite(spriteMaterial);
+    const sprite = new THREE.Sprite(this.spriteMaterial(graphAtom.element));
     sprite.position.set(graphAtom.position[0], graphAtom.position[1] + info.radius * ATOM_SCALE + 0.24, graphAtom.position[2]);
     sprite.scale.set(0.42, 0.21, 1);
     this.labels.add(sprite);
   }
 
   private addBond(graphBond: GraphBond, start: THREE.Vector3, end: THREE.Vector3, highlighted: boolean) {
-    const material = materialForBond(graphBond.order, highlighted);
-    this.createdMaterials.push(material);
+    const material = this.bondMaterial(graphBond.order, highlighted);
     const direction = new THREE.Vector3().subVectors(end, start);
     const length = direction.length();
     if (length < 0.001) return;
@@ -209,10 +233,7 @@ export class GraphMoleculeRenderer {
     }
 
     if (graphBond.order === "aromatic") {
-      const innerMaterial = materialForBond("aromatic", highlighted);
-      innerMaterial.opacity = 0.78;
-      innerMaterial.transparent = true;
-      this.createdMaterials.push(innerMaterial);
+      const innerMaterial = this.bondMaterial("aromatic", highlighted, true);
       const offsetVec = normal.clone().multiplyScalar(MULTI_BOND_SPACING * 0.82);
       this.addBondCylinder(start.clone().add(offsetVec), end.clone().add(offsetVec), BOND_RADIUS * 0.42, innerMaterial, graphBond);
     }

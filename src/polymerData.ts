@@ -79,11 +79,6 @@ export interface MolecularGraph {
   warnings: string[];
 }
 
-export interface EditorOverrides {
-  atomElements?: Record<string, AtomSymbol>;
-  bondOrders?: Record<string, BondOrder>;
-}
-
 function atom(id: string, element: AtomSymbol, x: number, y: number, z = 0, label?: string): TemplateAtom {
   return { id, element, position: [x, y, z], label };
 }
@@ -323,11 +318,7 @@ function bondOrderValue(order: BondOrder): number {
   return order === "aromatic" ? 1.5 : order;
 }
 
-export function generatePolymerGraph(
-  template: PolymerTemplate,
-  repeatCount: number,
-  overrides: EditorOverrides = {},
-): MolecularGraph {
+export function generatePolymerGraph(template: PolymerTemplate, repeatCount: number): MolecularGraph {
   const safeRepeats = Math.min(template.maxRepeats, Math.max(1, Math.round(repeatCount)));
   const atoms: GraphAtom[] = [];
   const bonds: GraphBond[] = [];
@@ -344,7 +335,7 @@ export function generatePolymerGraph(
       const graphAtom: GraphAtom = {
         id,
         templateAtomId: templateAtom.id,
-        element: overrides.atomElements?.[templateAtom.id] ?? templateAtom.element,
+        element: templateAtom.element,
         position,
         unit,
         label: templateAtom.label ?? templateAtom.element,
@@ -359,7 +350,7 @@ export function generatePolymerGraph(
         templateBondId: templateBond.id,
         a: `${templateBond.a}:${unit}`,
         b: `${templateBond.b}:${unit}`,
-        order: overrides.bondOrders?.[templateBond.id] ?? templateBond.order,
+        order: templateBond.order,
         unit,
       });
     }
@@ -381,7 +372,7 @@ export function generatePolymerGraph(
         templateBondId: "repeat-link",
         a: `${template.connection.rightAtomId}:${unit - 1}`,
         b: `${template.connection.leftAtomId}:${unit}`,
-        order: overrides.bondOrders?.["repeat-link"] ?? template.connection.order,
+        order: template.connection.order,
         unit,
       });
     }

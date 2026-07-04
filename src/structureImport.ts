@@ -2,6 +2,8 @@ import type { AtomSymbol, BondOrder, PolymerTemplate, TemplateAtom, TemplateBond
 
 export type StructureImportFormat = "auto" | "smiles" | "molfile" | "json";
 
+export const IMPORTED_TEMPLATE_ID = "imported-structure";
+
 export interface AttachmentSelection {
   leftAtomId?: string;
   rightAtomId?: string;
@@ -391,7 +393,7 @@ function buildTemplate(parsed: ParsedStructure, attachments: AttachmentSelection
   const repeatCount = Math.min(10, Math.max(1, Math.round(parsed.defaultRepeats ?? 4)));
 
   return {
-    id: "imported-structure",
+    id: IMPORTED_TEMPLATE_ID,
     name: safeLabel(parsed.name, "Imported repeat unit"),
     shortName: "Imported",
     family: "Imported structure",

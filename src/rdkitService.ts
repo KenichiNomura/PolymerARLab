@@ -41,7 +41,6 @@ export interface RDKitStatus {
 export interface RDKitNormalization {
   input: string;
   format: "molfile";
-  canonicalSmiles?: string;
   messages: string[];
 }
 
@@ -84,7 +83,6 @@ export async function normalizeStructureWithRDKit(
     return {
       input: molblock,
       format: "molfile",
-      canonicalSmiles,
       messages,
     };
   } finally {

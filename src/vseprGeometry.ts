@@ -1,16 +1,7 @@
 import type { BondOrder, PolymerTemplate, TemplateAtom, TemplateBond } from "./polymerData";
 
-export type GeometryCleanupMethod = "vsepr-browser";
-
 export interface GeometryCleanupOptions {
   mode: "molecule" | "polymer";
-}
-
-export interface GeometryCleanupResult {
-  template: PolymerTemplate;
-  changed: boolean;
-  method: GeometryCleanupMethod;
-  messages: string[];
 }
 
 type Vec3 = [number, number, number];
@@ -20,60 +11,30 @@ interface Neighbor {
   bond: TemplateBond;
 }
 
-interface PositionedTemplate {
-  template: PolymerTemplate;
-  messages: string[];
-}
-
 const DEFAULT_SINGLE_BOND = 1.45;
 const MAX_BROWSER_VSEPR_ATOMS = 32;
 const TETRAHEDRAL_ANGLE = (109.5 * Math.PI) / 180;
 const TRIGONAL_ANGLE = (120 * Math.PI) / 180;
 
-export function cleanupTemplateGeometry(
-  template: PolymerTemplate,
-  options: GeometryCleanupOptions,
-): GeometryCleanupResult {
-  if (template.atoms.length < 2 || template.atoms.length > MAX_BROWSER_VSEPR_ATOMS) {
-    return unchanged(template, ["VSEPR cleanup skipped for this structure size."]);
-  }
+export function cleanupTemplateGeometry(template: PolymerTemplate, options: GeometryCleanupOptions): PolymerTemplate {
+  if (template.atoms.length < 2 || template.atoms.length > MAX_BROWSER_VSEPR_ATOMS) return template;
 
   const adjacency = buildAdjacency(template);
   const atomById = atomMap(template);
 
   if (options.mode === "polymer") {
-    const cleanedRepeat = cleanupDirectRepeatUnit(template, atomById, adjacency);
-    if (cleanedRepeat) {
-      return {
-        template: cleanedRepeat.template,
-        changed: true,
-        method: "vsepr-browser",
-        messages: cleanedRepeat.messages,
-      };
-    }
-    return unchanged(template, ["VSEPR cleanup kept the existing polymer geometry."]);
+    return cleanupDirectRepeatUnit(template, atomById, adjacency) ?? template;
   }
 
-  if (hasCycle(template, adjacency)) {
-    return unchanged(template, ["VSEPR cleanup kept the existing ring geometry."]);
-  }
-
-  const cleanedMolecule = layoutAcyclicMolecule(template, atomById, adjacency);
-  if (!cleanedMolecule) return unchanged(template, ["VSEPR cleanup kept the existing molecule geometry."]);
-
-  return {
-    template: cleanedMolecule.template,
-    changed: true,
-    method: "vsepr-browser",
-    messages: cleanedMolecule.messages,
-  };
+  if (hasCycle(template, adjacency)) return template;
+  return layoutAcyclicMolecule(template, atomById, adjacency) ?? template;
 }
 
 function cleanupDirectRepeatUnit(
   template: PolymerTemplate,
   atomById: Map<string, TemplateAtom>,
   adjacency: Map<string, Neighbor[]>,
-): PositionedTemplate | null {
+): PolymerTemplate | null {
   const left = atomById.get(template.connection.leftAtomId);
   const right = atomById.get(template.connection.rightAtomId);
   if (!left || !right) return null;
@@ -97,9 +58,9 @@ function cleanupDirectRepeatUnit(
     branchNeighbors.forEach((neighbor, index) => {
       const component = collectComponent(neighbor.atomId, blocked, adjacency);
       if (componentHasCycle(component, adjacency)) {
-        placeCyclicBranch(template, atomById, adjacency, positions, anchor.id, neighbor, index, branchNeighbors.length);
+        placeCyclicBranch(atomById, adjacency, positions, anchor.id, neighbor, index, branchNeighbors.length);
       } else {
-        placeAcyclicBranch(template, atomById, adjacency, positions, placed, anchor.id, neighbor, index, branchNeighbors.length);
+        placeAcyclicBranch(atomById, adjacency, positions, placed, anchor.id, neighbor, index, branchNeighbors.length);
       }
       for (const atomId of component) placed.add(atomId);
     });
@@ -112,17 +73,14 @@ function cleanupDirectRepeatUnit(
     }
   }
 
-  return {
-    template: templateWithPositions(template, positions, repeatLength),
-    messages: ["Applied browser VSEPR cleanup to the direct polymer repeat axis."],
-  };
+  return templateWithPositions(template, positions, repeatLength);
 }
 
 function layoutAcyclicMolecule(
   template: PolymerTemplate,
   atomById: Map<string, TemplateAtom>,
   adjacency: Map<string, Neighbor[]>,
-): PositionedTemplate | null {
+): PolymerTemplate | null {
   const path = longestAtomPath(template, adjacency);
   if (path.length < 2) return null;
 
@@ -155,20 +113,15 @@ function layoutAcyclicMolecule(
     );
     branches.forEach((neighbor, index) => {
       const parentId = path[path.indexOf(atomId) === 0 ? 1 : path.indexOf(atomId) - 1];
-      placeAcyclicBranch(template, atomById, adjacency, positions, placed, atomId, neighbor, index, branches.length, parentId);
+      placeAcyclicBranch(atomById, adjacency, positions, placed, atomId, neighbor, index, branches.length, parentId);
     });
   }
 
   centerPositions(positions);
-
-  return {
-    template: templateWithPositions(template, positions),
-    messages: ["Applied browser VSEPR cleanup to the acyclic molecule."],
-  };
+  return templateWithPositions(template, positions);
 }
 
 function placeAcyclicBranch(
-  template: PolymerTemplate,
   atomById: Map<string, TemplateAtom>,
   adjacency: Map<string, Neighbor[]>,
   positions: Map<string, Vec3>,
@@ -187,11 +140,10 @@ function placeAcyclicBranch(
   const direction = chooseVseprDirection(anchor, adjacency, positions, anchorId, knownAtomId, 1, branchIndex, branchCount);
   positions.set(neighbor.atomId, addVec(origin, scaleVec(direction, targetBondLength(neighbor.bond.order))));
   placed.add(neighbor.atomId);
-  placeChildren(template, atomById, adjacency, positions, placed, neighbor.atomId, anchorId, 1);
+  placeChildren(atomById, adjacency, positions, placed, neighbor.atomId, anchorId, 1);
 }
 
 function placeChildren(
-  template: PolymerTemplate,
   atomById: Map<string, TemplateAtom>,
   adjacency: Map<string, Neighbor[]>,
   positions: Map<string, Vec3>,
@@ -210,12 +162,11 @@ function placeChildren(
     const direction = chooseVseprDirection(atom, adjacency, positions, atomId, parentId, sideSign, index, children.length);
     positions.set(child.atomId, addVec(origin, scaleVec(direction, targetBondLength(child.bond.order))));
     placed.add(child.atomId);
-    placeChildren(template, atomById, adjacency, positions, placed, child.atomId, atomId, sideSign);
+    placeChildren(atomById, adjacency, positions, placed, child.atomId, atomId, sideSign);
   });
 }
 
 function placeCyclicBranch(
-  template: PolymerTemplate,
   atomById: Map<string, TemplateAtom>,
   adjacency: Map<string, Neighbor[]>,
   positions: Map<string, Vec3>,
@@ -484,11 +435,3 @@ function round(value: number) {
   return Number(value.toFixed(4));
 }
 
-function unchanged(template: PolymerTemplate, messages: string[]): GeometryCleanupResult {
-  return {
-    template,
-    changed: false,
-    method: "vsepr-browser",
-    messages,
-  };
-}
