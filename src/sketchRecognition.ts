@@ -91,11 +91,16 @@ export function recognizeSketchImage(image: ImageData, source: RecognitionSource
 
   // Connected strokes (bonds meeting at a vertex, zigzag chains) form blobs
   // that classify poorly as letters; decompose those into line segments.
+  // Guard: sloppy handwriting also scores low, so a blob comparable in size
+  // to confidently recognized letters stays a letter no matter its score.
+  const confidentSizes = glyphs.filter((glyph) => glyph.score >= 0.6).map(glyphSize);
+  const letterSize = median(confidentSizes);
   const strokeBlobs = glyphs.filter(
     (glyph) =>
-      glyph.score < 0.55 &&
+      glyph.score < 0.5 &&
       glyph.component.holes === 0 &&
-      Math.max(glyph.component.width, glyph.component.height) >= MIN_LINE_LENGTH * 1.5,
+      glyphSize(glyph) >= MIN_LINE_LENGTH * 1.5 &&
+      (confidentSizes.length === 0 || glyphSize(glyph) > letterSize * 1.7),
   );
   glyphs = glyphs.filter((glyph) => !strokeBlobs.includes(glyph));
   const decomposedSegments = [...strokeBlobs.map((glyph) => glyph.component), ...bentStrokes].flatMap(
@@ -126,59 +131,120 @@ export function recognizeSketchImage(image: ImageData, source: RecognitionSource
   };
 }
 
+// Exposed for diagnostics and threshold tuning (see scratch test harnesses).
+export function debugSketchAnalysis(image: ImageData) {
+  const mask = binarize(image);
+  const components = findComponents(mask, image.width, image.height).filter(
+    (component) => component.area >= MIN_COMPONENT_AREA,
+  );
+  const { letterComponents, lineComponents, bentStrokes, ignored } = splitComponents(components);
+  const glyphs = letterComponents.map((component) => classifyGlyph(component, mask, image.width));
+  return {
+    inkPixels: mask.reduce((sum, value) => sum + value, 0),
+    components: components.map((component) => ({
+      bbox: [component.minX, component.minY, component.maxX, component.maxY],
+      area: component.area,
+      elongation: Number(component.elongation.toFixed(2)),
+      majorLength: Number(component.majorLength.toFixed(1)),
+      minorLength: Number(component.minorLength.toFixed(1)),
+      holes: component.holes,
+    })),
+    glyphs: glyphs.map((glyph) => ({
+      char: glyph.char,
+      score: Number(glyph.score.toFixed(3)),
+      bbox: [glyph.component.minX, glyph.component.minY, glyph.component.maxX, glyph.component.maxY],
+      holes: glyph.component.holes,
+    })),
+    lineCount: lineComponents.length,
+    bentCount: bentStrokes.length,
+    ignored,
+  };
+}
+
 // --- Binarization ---
 
+// Bradley-style adaptive threshold: compare each pixel against its local
+// neighborhood mean so paper texture, shadows, and lighting gradients do not
+// read as ink the way a global Otsu split can. A closing pass afterwards
+// heals thin ballpoint strokes that the camera breaks into dashes.
 function binarize(image: ImageData): Uint8Array {
   const { data, width, height } = image;
   const size = width * height;
   const gray = new Uint8Array(size);
-  const histogram = new Array<number>(256).fill(0);
   for (let index = 0; index < size; index++) {
     const offset = index * 4;
-    const value = Math.round(0.299 * data[offset] + 0.587 * data[offset + 1] + 0.114 * data[offset + 2]);
-    gray[index] = value;
-    histogram[value] += 1;
+    gray[index] = Math.round(0.299 * data[offset] + 0.587 * data[offset + 1] + 0.114 * data[offset + 2]);
   }
 
-  const threshold = otsuThreshold(histogram, size);
+  const integral = new Float64Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x++) {
+      rowSum += gray[y * width + x];
+      integral[(y + 1) * (width + 1) + x + 1] = integral[y * (width + 1) + x + 1] + rowSum;
+    }
+  }
+
+  const half = Math.max(8, Math.round(Math.max(width, height) / 16));
   const mask = new Uint8Array(size);
   let inkCount = 0;
-  for (let index = 0; index < size; index++) {
-    if (gray[index] < threshold) {
-      mask[index] = 1;
-      inkCount += 1;
+  for (let y = 0; y < height; y++) {
+    const y0 = Math.max(0, y - half);
+    const y1 = Math.min(height - 1, y + half);
+    for (let x = 0; x < width; x++) {
+      const x0 = Math.max(0, x - half);
+      const x1 = Math.min(width - 1, x + half);
+      const count = (x1 - x0 + 1) * (y1 - y0 + 1);
+      const sum =
+        integral[(y1 + 1) * (width + 1) + x1 + 1] -
+        integral[y0 * (width + 1) + x1 + 1] -
+        integral[(y1 + 1) * (width + 1) + x0] +
+        integral[y0 * (width + 1) + x0];
+      const mean = sum / count;
+      const value = gray[y * width + x];
+      if (value < mean * 0.86 && mean - value > 10) {
+        mask[y * width + x] = 1;
+        inkCount += 1;
+      }
     }
   }
 
-  // A nearly uniform image makes Otsu split noise; treat as blank.
-  if (inkCount > size * 0.5) return new Uint8Array(size);
-  return mask;
+  // Mostly-dark frames are not paper sketches; treat as blank.
+  if (inkCount > size * 0.35) return new Uint8Array(size);
+  return closeMask(mask, width, height);
 }
 
-function otsuThreshold(histogram: number[], total: number): number {
-  let sum = 0;
-  for (let value = 0; value < 256; value++) sum += value * histogram[value];
-
-  let sumBackground = 0;
-  let weightBackground = 0;
-  let bestVariance = 0;
-  let threshold = 127;
-
-  for (let value = 0; value < 256; value++) {
-    weightBackground += histogram[value];
-    if (weightBackground === 0) continue;
-    const weightForeground = total - weightBackground;
-    if (weightForeground === 0) break;
-    sumBackground += value * histogram[value];
-    const meanBackground = sumBackground / weightBackground;
-    const meanForeground = (sum - sumBackground) / weightForeground;
-    const variance = weightBackground * weightForeground * (meanBackground - meanForeground) ** 2;
-    if (variance > bestVariance) {
-      bestVariance = variance;
-      threshold = value;
+// Morphological closing (dilate then erode, radius 1) to reconnect strokes.
+function closeMask(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const dilated = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (mask[y * width + x] === 0) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height) dilated[ny * width + nx] = 1;
+        }
+      }
     }
   }
-  return threshold;
+  const closed = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (dilated[y * width + x] === 0) continue;
+      let keep = true;
+      for (let dy = -1; dy <= 1 && keep; dy++) {
+        for (let dx = -1; dx <= 1 && keep; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height || dilated[ny * width + nx] === 0) keep = false;
+        }
+      }
+      if (keep) closed[y * width + x] = 1;
+    }
+  }
+  return closed;
 }
 
 // --- Connected components and shape features ---
@@ -430,6 +496,10 @@ function overlap1d(minA: number, maxA: number, minB: number, maxB: number) {
   return Math.max(0, Math.min(maxA, maxB) - Math.max(minA, minB));
 }
 
+function glyphSize(glyph: Glyph) {
+  return Math.max(glyph.component.width, glyph.component.height);
+}
+
 // --- Glyph classification ---
 
 let templateCache: Array<{ char: string; holes: number; vector: Float32Array }> | null = null;
@@ -443,31 +513,38 @@ function glyphTemplates() {
   canvas.height = 96;
   const context = canvas.getContext("2d", { willReadFrequently: true })!;
 
-  for (const char of GLYPH_CHARS) {
-    for (const font of TEMPLATE_FONTS) {
+  const variants: Array<[string, string, number]> = [];
+  for (const font of TEMPLATE_FONTS) {
+    for (const weight of ["bold", "normal"]) {
       for (const rotation of TEMPLATE_ROTATIONS) {
-        context.setTransform(1, 0, 0, 1, 0, 0);
-        context.fillStyle = "#fff";
-        context.fillRect(0, 0, 96, 96);
-        context.fillStyle = "#000";
-        context.translate(48, 48);
-        context.rotate(rotation);
-        context.font = `bold 56px "${font}", sans-serif`;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillText(char, 0, 0);
-
-        const image = context.getImageData(0, 0, 96, 96);
-        const mask = binarize(image);
-        const components = findComponents(mask, 96, 96).filter((component) => component.area >= MIN_COMPONENT_AREA);
-        if (components.length === 0) continue;
-        const merged = mergeComponents(components);
-        templateCache.push({
-          char,
-          holes: merged.holes,
-          vector: rasterizeComponent(merged, mask, 96),
-        });
+        variants.push([font, weight, rotation]);
       }
+    }
+  }
+
+  for (const char of GLYPH_CHARS) {
+    for (const [font, weight, rotation] of variants) {
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, 96, 96);
+      context.fillStyle = "#000";
+      context.translate(48, 48);
+      context.rotate(rotation);
+      context.font = `${weight} 56px "${font}", sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(char, 0, 0);
+
+      const image = context.getImageData(0, 0, 96, 96);
+      const mask = binarize(image);
+      const components = findComponents(mask, 96, 96).filter((component) => component.area >= MIN_COMPONENT_AREA);
+      if (components.length === 0) continue;
+      const merged = mergeComponents(components);
+      templateCache.push({
+        char,
+        holes: merged.holes,
+        vector: rasterizeComponent(merged, mask, 96),
+      });
     }
   }
   return templateCache;
@@ -507,8 +584,10 @@ function concatPixels(components: InkComponent[]): Int32Array {
   return result;
 }
 
+// Rasterize to a binary presence grid, then dilate one cell. Thickness
+// normalization matters: a thin ballpoint glyph and a bold template must
+// produce similar grids or handwriting scores collapse.
 function rasterizeComponent(component: InkComponent, mask: Uint8Array, width: number): Float32Array {
-  const grid = new Float32Array(GRID * GRID);
   const counts = new Float32Array(GRID * GRID);
   const scale = Math.max(component.width, component.height);
   const offsetX = component.minX + component.width / 2 - scale / 2;
@@ -522,9 +601,19 @@ function rasterizeComponent(component: InkComponent, mask: Uint8Array, width: nu
     counts[gy * GRID + gx] += 1;
   }
 
-  const cellArea = (scale / GRID) ** 2;
-  for (let cell = 0; cell < grid.length; cell++) {
-    grid[cell] = Math.min(1, counts[cell] / (cellArea * 0.45));
+  const minCount = Math.max(1, (scale / GRID) ** 2 * 0.04);
+  const grid = new Float32Array(GRID * GRID);
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      if (counts[gy * GRID + gx] < minCount) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = gx + dx;
+          const ny = gy + dy;
+          if (nx >= 0 && ny >= 0 && nx < GRID && ny < GRID) grid[ny * GRID + nx] = 1;
+        }
+      }
+    }
   }
   return grid;
 }
@@ -848,12 +937,19 @@ function areParallelPartners(a: Segment, b: Segment): boolean {
   const angleDiff = angleDistance(a.angle, b.angle);
   if (angleDiff > 0.32) return false;
 
+  // Strokes of one multi-bond are drawn with similar lengths; wildly
+  // different lengths are separate bonds that happen to be parallel.
+  const lengthRatio = Math.max(a.length, b.length) / Math.max(1, Math.min(a.length, b.length));
+  if (lengthRatio > 2.2) return false;
+
   const axisX = Math.cos(a.angle);
   const axisY = Math.sin(a.angle);
   const midB = { x: (b.start.x + b.end.x) / 2, y: (b.start.y + b.end.y) / 2 };
   const midA = { x: (a.start.x + a.end.x) / 2, y: (a.start.y + a.end.y) / 2 };
   const perpendicular = Math.abs((midB.x - midA.x) * -axisY + (midB.y - midA.y) * axisX);
-  const maxSpacing = Math.max(16, (a.thickness + b.thickness) * 3.4);
+  // Thin-pen double bonds can be spaced wide relative to stroke thickness,
+  // so also allow spacing proportional to the stroke length.
+  const maxSpacing = Math.max(16, (a.thickness + b.thickness) * 3.4, Math.min(a.length, b.length) * 0.6);
   if (perpendicular < 1 || perpendicular > maxSpacing) return false;
 
   const projectionsA = [projectOnto(a.start, midA, axisX, axisY), projectOnto(a.end, midA, axisX, axisY)];
@@ -889,7 +985,9 @@ function assembleGraph(labels: AtomLabel[], bondGroups: Segment[][], warnings: s
     let bestDistance = Infinity;
     for (const label of allLabels) {
       const distance = Math.hypot(point.x - label.center.x, point.y - label.center.y);
-      const reach = label.implicit ? Math.max(14, medianLength * 0.3) : label.radius + Math.max(18, medianLength * 0.42);
+      // Students leave sizeable gaps between bond strokes and letters, so the
+      // reach has to cover roughly half the inter-atom spacing.
+      const reach = label.implicit ? Math.max(14, medianLength * 0.3) : label.radius + Math.max(20, medianLength * 0.6);
       if (distance < reach && distance < bestDistance) {
         best = label;
         bestDistance = distance;
