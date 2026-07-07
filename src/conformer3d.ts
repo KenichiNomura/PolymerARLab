@@ -37,6 +37,13 @@ export function preloadConformerResources(): Promise<void> {
 
 export interface Conformer3DOptions {
   mode: "molecule" | "polymer";
+  /** Also emit the hydrogens openchemlib adds to satisfy valences. */
+  includeHydrogens?: boolean;
+}
+
+interface HydrogenRecord {
+  parentIndex: number;
+  position: Vec3;
 }
 
 export function templateTo3D(template: PolymerTemplate, options: Conformer3DOptions): PolymerTemplate | null {
@@ -57,26 +64,98 @@ export function templateTo3D(template: PolymerTemplate, options: Conformer3DOpti
       const atom = map[index];
       return [conformer.getAtomX(atom), conformer.getAtomY(atom), conformer.getAtomZ(atom)];
     });
+    let hydrogens = options.includeHydrogens ? collectGeneratedHydrogens(conformer, template, map) : [];
 
     if (options.mode === "polymer") {
-      const aligned = alignToConnection(template, positions);
+      const aligned = alignToConnection(template, positions, hydrogens);
       if (!aligned) return null;
       positions = aligned.positions;
-      return {
-        ...template,
-        atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(positions[index]) })),
-        step: [round(aligned.stepX), 0, 0],
-      };
+      hydrogens = dropChainLinkHydrogens(template, aligned.hydrogens);
+      return withHydrogens(
+        {
+          ...template,
+          atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(positions[index]) })),
+          step: [round(aligned.stepX), 0, 0],
+        },
+        hydrogens,
+      );
     }
 
-    const centered = centerPositions(positions);
-    return {
-      ...template,
-      atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(centered[index]) })),
-    };
+    const centered = centerPositions([...positions, ...hydrogens.map((hydrogen) => hydrogen.position)]);
+    return withHydrogens(
+      {
+        ...template,
+        atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(centered[index]) })),
+      },
+      hydrogens.map((hydrogen, index) => ({ ...hydrogen, position: centered[positions.length + index] })),
+    );
   } catch {
     return null;
   }
+}
+
+// The conformer generator saturates free valences with hydrogens and places
+// them in 3D; keep them, attached to their template parent atoms.
+function collectGeneratedHydrogens(
+  conformer: Molecule,
+  template: PolymerTemplate,
+  map: number[],
+): HydrogenRecord[] {
+  const templateIndexByMolAtom = new Map<number, number>();
+  template.atoms.forEach((_, index) => templateIndexByMolAtom.set(map[index], index));
+
+  const hydrogens: HydrogenRecord[] = [];
+  for (let bond = 0; bond < conformer.getAllBonds(); bond++) {
+    const a = conformer.getBondAtom(0, bond);
+    const b = conformer.getBondAtom(1, bond);
+    const generated = (atom: number) => !templateIndexByMolAtom.has(atom) && conformer.getAtomicNo(atom) === 1;
+    const hydrogenAtom = generated(a) ? a : generated(b) ? b : -1;
+    if (hydrogenAtom < 0) continue;
+    const parentIndex = templateIndexByMolAtom.get(hydrogenAtom === a ? b : a);
+    if (parentIndex == null) continue;
+    hydrogens.push({
+      parentIndex,
+      position: [conformer.getAtomX(hydrogenAtom), conformer.getAtomY(hydrogenAtom), conformer.getAtomZ(hydrogenAtom)],
+    });
+  }
+  return hydrogens;
+}
+
+// Attachment atoms give one hydrogen each to the repeat link, so hide the
+// hydrogen pointing along the chain axis (outward) on each side.
+function dropChainLinkHydrogens(template: PolymerTemplate, hydrogens: HydrogenRecord[]): HydrogenRecord[] {
+  const leftIndex = template.atoms.findIndex((atom) => atom.id === template.connection.leftAtomId);
+  const rightIndex = template.atoms.findIndex((atom) => atom.id === template.connection.rightAtomId);
+
+  const dropOutermost = (records: HydrogenRecord[], parentIndex: number, direction: 1 | -1) => {
+    let dropAt = -1;
+    let best = -Infinity;
+    records.forEach((record, index) => {
+      if (record.parentIndex !== parentIndex) return;
+      const along = record.position[0] * direction;
+      if (along > best) {
+        best = along;
+        dropAt = index;
+      }
+    });
+    return dropAt < 0 ? records : records.filter((_, index) => index !== dropAt);
+  };
+
+  let result = dropOutermost(hydrogens, leftIndex, -1);
+  result = dropOutermost(result, rightIndex, 1);
+  return result;
+}
+
+function withHydrogens(template: PolymerTemplate, hydrogens: HydrogenRecord[]): PolymerTemplate {
+  if (hydrogens.length === 0) return template;
+  const atoms = [...template.atoms];
+  const bonds = [...template.bonds];
+  hydrogens.forEach((hydrogen, index) => {
+    const parent = template.atoms[hydrogen.parentIndex];
+    atoms.push({ id: `hx${index + 1}`, element: "H", position: roundVec(hydrogen.position) });
+    bonds.push({ id: `hxb${index + 1}`, a: parent.id, b: `hx${index + 1}`, order: 1 });
+  });
+  return { ...template, atoms, bonds };
 }
 
 type Vec3 = [number, number, number];
@@ -173,7 +252,8 @@ function coord(value: number): string {
 function alignToConnection(
   template: PolymerTemplate,
   positions: Vec3[],
-): { positions: Vec3[]; stepX: number } | null {
+  hydrogens: HydrogenRecord[],
+): { positions: Vec3[]; hydrogens: HydrogenRecord[]; stepX: number } | null {
   const leftIndex = template.atoms.findIndex((atom) => atom.id === template.connection.leftAtomId);
   const rightIndex = template.atoms.findIndex((atom) => atom.id === template.connection.rightAtomId);
   if (leftIndex < 0 || rightIndex < 0 || leftIndex === rightIndex) return null;
@@ -188,12 +268,16 @@ function alignToConnection(
   const u2 = normalizeVec(crossVec(helper, u1));
   const u3 = crossVec(u1, u2);
 
-  const aligned = positions.map((position): Vec3 => {
+  const transform = (position: Vec3): Vec3 => {
     const relative = subVec(position, origin);
     return [dotVec(relative, u1), dotVec(relative, u2), dotVec(relative, u3)];
-  });
+  };
 
-  return { positions: aligned, stepX: axisLength + REPEAT_LINK_BOND };
+  return {
+    positions: positions.map(transform),
+    hydrogens: hydrogens.map((hydrogen) => ({ ...hydrogen, position: transform(hydrogen.position) })),
+    stepX: axisLength + REPEAT_LINK_BOND,
+  };
 }
 
 function centerPositions(positions: Vec3[]): Vec3[] {

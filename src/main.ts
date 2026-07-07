@@ -64,6 +64,7 @@ const importStatus = document.getElementById("importStatus")!;
 const repeatRange = document.getElementById("repeatRange") as HTMLInputElement;
 const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
+const hydrogensToggle = document.getElementById("hydrogensToggle") as HTMLInputElement;
 const cameraModeBtn = document.getElementById("cameraModeBtn") as HTMLButtonElement;
 const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
@@ -289,6 +290,11 @@ labelsToggle.addEventListener("change", () => {
   three?.moleculeRenderer.setLabelsVisible(labelsToggle.checked);
 });
 
+hydrogensToggle.addEventListener("change", () => {
+  rebuildGraph();
+  setStatus(hydrogensToggle.checked ? "Showing hydrogens on open valences." : "Hiding generated hydrogens.");
+});
+
 cameraModeBtn.addEventListener("click", () => {
   void startCameraMode();
 });
@@ -493,7 +499,9 @@ function rebuildGraph() {
   const activeTemplate = getActiveTemplate(polymerSelect.value);
   const mode = isPolymerMode() ? "polymer" : "molecule";
   // Real 3D conformer first (openchemlib); heuristic VSEPR layout as fallback.
-  currentTemplate = templateTo3D(activeTemplate, { mode }) ?? cleanupTemplateGeometry(activeTemplate, { mode });
+  currentTemplate =
+    templateTo3D(activeTemplate, { mode, includeHydrogens: hydrogensToggle.checked }) ??
+    cleanupTemplateGeometry(activeTemplate, { mode });
   repeatRange.max = String(currentTemplate.maxRepeats);
   if (Number(repeatRange.value) > currentTemplate.maxRepeats) {
     repeatRange.value = String(currentTemplate.maxRepeats);

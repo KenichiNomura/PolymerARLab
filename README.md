@@ -103,7 +103,9 @@ when offline or undeployed.
 All structures (presets, imports, scans) are embedded in real 3D with
 openchemlib's torsion-library conformer generator (`src/conformer3d.ts`):
 water is bent, methane is tetrahedral, rings are planar, and polymer repeat
-units are aligned along the chain axis. The previous VSEPR heuristics
+units are aligned along the chain axis. The "Show hydrogens" toggle (View and
+AR panel) completes open valences with conformer-placed hydrogen atoms —
+polymer attachment positions stay hydrogen-free so chains link cleanly. The previous VSEPR heuristics
 (`src/vseprGeometry.ts`) remain as an instant fallback while the conformer
 resources (`public/vendor/openchemlib/resources.json`) load, and for
 structures openchemlib cannot parse.
