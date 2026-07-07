@@ -1,15 +1,14 @@
 import type { RecognitionSource, RecognizedStructure } from "./scannerContract";
 import { recognizedStructureToGraphJson } from "./scannerContract";
+import { recognizeSketchImage } from "./sketchRecognition";
 
 const TARGET_BOND_LENGTH = 1.45;
+const MAX_RECOGNITION_DIMENSION = 720;
 
 /**
- * Recognize a captured sketch frame as a molecular graph.
- *
- * Real handwritten recognition is roadmap phase 4. Until it lands, this
- * returns a demo fixture (with an explicit warning) so the full
- * capture -> scanner contract -> graph JSON -> import -> render path can be
- * exercised end to end on every device.
+ * Recognize a captured sketch frame as a molecular graph following the
+ * scanner contract. Camera frames are downscaled before analysis so phone
+ * captures stay fast and stroke thresholds behave consistently.
  */
 export async function recognizeSketch(
   canvas: HTMLCanvasElement,
@@ -18,7 +17,20 @@ export async function recognizeSketch(
   if (canvas.width === 0 || canvas.height === 0) {
     throw new Error("Capture a sketch frame before running recognition.");
   }
-  return demoRecognitionFixture(source, canvas.width, canvas.height);
+  return recognizeSketchImage(recognitionImageData(canvas), source);
+}
+
+function recognitionImageData(canvas: HTMLCanvasElement): ImageData {
+  const scale = Math.min(1, MAX_RECOGNITION_DIMENSION / Math.max(canvas.width, canvas.height));
+  if (scale >= 1) {
+    return canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+  }
+  const scaled = document.createElement("canvas");
+  scaled.width = Math.round(canvas.width * scale);
+  scaled.height = Math.round(canvas.height * scale);
+  const context = scaled.getContext("2d", { willReadFrequently: true })!;
+  context.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+  return context.getImageData(0, 0, scaled.width, scaled.height);
 }
 
 /**
@@ -59,29 +71,4 @@ function largestSpan(atoms: RecognizedStructure["atoms"]) {
   const xs = atoms.map((atom) => atom.position.x);
   const ys = atoms.map((atom) => atom.position.y);
   return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-}
-
-function demoRecognitionFixture(source: RecognitionSource, width: number, height: number): RecognizedStructure {
-  const bond = Math.min(width, height) * 0.18;
-  const originX = width * 0.3;
-  const originY = height * 0.55;
-  return {
-    source,
-    name: "Demo scan: ethanol",
-    atoms: [
-      { id: "a1", element: "C", position: { x: originX, y: originY }, confidence: 0.93 },
-      { id: "a2", element: "C", position: { x: originX + bond, y: originY - bond * 0.55 }, confidence: 0.91 },
-      { id: "a3", element: "O", position: { x: originX + bond * 2, y: originY }, confidence: 0.88 },
-      { id: "a4", element: "H", position: { x: originX + bond * 3, y: originY - bond * 0.45 }, confidence: 0.72 },
-    ],
-    bonds: [
-      { id: "b1", a: "a1", b: "a2", order: 1, confidence: 0.92 },
-      { id: "b2", a: "a2", b: "a3", order: 1, confidence: 0.9 },
-      { id: "b3", a: "a3", b: "a4", order: 1, confidence: 0.7 },
-    ],
-    confidence: 0.4,
-    warnings: [
-      "Handwritten recognition is not implemented yet; this is a demo ethanol result that verifies the scan pipeline.",
-    ],
-  };
 }

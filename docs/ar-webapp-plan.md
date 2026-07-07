@@ -36,6 +36,7 @@ Completed:
 - Enabled GitHub Pages for the repository and verified the hosted build loads RDKit.js and imports SMILES end to end (July 7, 2026).
 - Hardened import validation messages: supported-atom lists in errors, invalid bond orders rejected instead of silently coerced, attachment-point fallbacks reported, and Molfile header names parsed correctly (SMILES imports keep the typed SMILES as the display name).
 - Connected camera capture and image upload to the scanner graph contract with a demo recognition fixture, including image-to-model coordinate normalization.
+- Replaced the demo fixture with a real browser-side recognizer for clean marker Lewis structures (Otsu binarization, glyph templates, stroke decomposition, multi-bond grouping, implicit carbons), validated on 11 synthetic hand-style sketches including noisy/blurred/rotated captures (July 7, 2026).
 
 ## Recommended Architecture
 
@@ -233,11 +234,11 @@ Draw or select a polystyrene repeat unit
 
 ## Immediate Next Step
 
-The structure input pipeline is verified end to end (hosted RDKit.js, hardened
-validation messages, capture/upload wired to the scanner contract via a demo
-recognizer). Next:
+The structure input pipeline is verified end to end, and the first real
+recognizer (clean marker Lewis structures) is in `src/sketchRecognition.ts`.
+Next:
 
-1. Replace the demo recognizer in `src/scannerPipeline.ts` with first real recognition, starting with clean black-marker structures on white paper.
-2. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
-3. Add USDZ/Quick Look export for native iOS AR preview (Phase 3).
-4. Start Phase 5 packaging: PWA manifest, saved examples, shareable links.
+1. Try the recognizer against real handwriting photographed with a phone; tune thresholds and template fonts from what fails.
+2. Extend recognition toward the remaining MVP targets: ring structures, aromatic circles, and polymer bracket/`n` detection with repeat-unit hints.
+3. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
+4. Add USDZ/Quick Look export for native iOS AR preview (Phase 3), then Phase 5 packaging (PWA manifest, saved examples, shareable links).

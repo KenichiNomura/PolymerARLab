@@ -84,12 +84,16 @@ import pipeline, then flows through validation, VSEPR cleanup, rendering, and AR
 The current roadmap is tracked in
 [`docs/ar-webapp-plan.md`](docs/ar-webapp-plan.md).
 
-Camera capture and image upload now flow through the scanner contract using a
-demo recognition fixture, so the scan-to-structure path is testable end to end.
+Camera capture and image upload run a browser-side recognizer for clean
+black-marker Lewis structures (`src/sketchRecognition.ts`): letters classify
+against font templates, strokes become bonds (including double/triple pairs
+and skeletal implicit carbons), and results land in editable graph JSON with
+confidence and warnings before the 3D model is generated.
 
 Near-term work:
 
-- add real recognition in small steps, starting with clean black-marker structures;
+- tune recognition against real photographed handwriting;
+- add ring, aromatic-circle, and polymer-bracket detection;
 - test AR placement on physical Android and iPhone devices;
 - add USDZ/Quick Look export for native iOS AR preview.
 
