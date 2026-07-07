@@ -1,0 +1,14 @@
+name = "polymer-ar-lab-recognizer"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (set with `npx wrangler secret put <NAME>`):
+#   ANTHROPIC_API_KEY - your Anthropic API key
+
+[vars]
+# Vision model used for sketch recognition. claude-haiku-4-5 is the low-cost
+# alternative (~5x cheaper per scan) if accuracy allows.
+MODEL = "claude-opus-4-8"
+# Comma-separated list of allowed browser origins.
+ALLOWED_ORIGINS = "https://kenichinomura.github.io,http://localhost:5173,https://localhost:5173,http://localhost:8123"

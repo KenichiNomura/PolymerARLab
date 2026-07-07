@@ -37,6 +37,9 @@ Completed:
 - Hardened import validation messages: supported-atom lists in errors, invalid bond orders rejected instead of silently coerced, attachment-point fallbacks reported, and Molfile header names parsed correctly (SMILES imports keep the typed SMILES as the display name).
 - Connected camera capture and image upload to the scanner graph contract with a demo recognition fixture, including image-to-model coordinate normalization.
 - Replaced the demo fixture with a real browser-side recognizer for clean marker Lewis structures (Otsu binarization, glyph templates, stroke decomposition, multi-bond grouping, implicit carbons), validated on 11 synthetic hand-style sketches including noisy/blurred/rotated captures (July 7, 2026).
+- Hardened the on-device recognizer against real handwriting: adaptive thresholding, stroke-thickness-normalized glyph matching, multi-stroke letter grouping, H/N connector disambiguation, direction-aware bond attachment (July 7, 2026; validated on real CO2 and H2O pen photos).
+- Added AI recognition: sketch photo -> Cloudflare Worker (`worker/`) -> Claude vision -> SMILES with structured output, falling back to the on-device recognizer offline; chemically invalid as-drawn structures import permissively so the valence checker can flag them (July 7, 2026).
+- Replaced heuristic VSEPR layouts with real 3D conformers via openchemlib's ConformerGenerator for all structures (bent water, tetrahedral carbons, planar rings, chain-axis-aligned polymer repeat units), with VSEPR as fallback (July 7, 2026).
 
 ## Recommended Architecture
 
@@ -234,11 +237,10 @@ Draw or select a polystyrene repeat unit
 
 ## Immediate Next Step
 
-The structure input pipeline is verified end to end, and the first real
-recognizer (clean marker Lewis structures) is in `src/sketchRecognition.ts`.
-Next:
+Recognition now has two engines (AI via `worker/` + Claude vision, and the
+on-device classical fallback), and all structures render with real 3D
+conformers. Next:
 
-1. Try the recognizer against real handwriting photographed with a phone; tune thresholds and template fonts from what fails.
-2. Extend recognition toward the remaining MVP targets: ring structures, aromatic circles, and polymer bracket/`n` detection with repeat-unit hints.
-3. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
-4. Add USDZ/Quick Look export for native iOS AR preview (Phase 3), then Phase 5 packaging (PWA manifest, saved examples, shareable links).
+1. Deploy the `worker/` recognizer (needs an Anthropic API key + Cloudflare account) and evaluate AI recognition on varied real handwriting, including rings and polymer brackets (the Worker already returns repeat-unit hints).
+2. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
+3. Add USDZ/Quick Look export for native iOS AR preview (Phase 3), then Phase 5 packaging (PWA manifest, saved examples, shareable links).

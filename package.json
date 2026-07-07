@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@rdkit/rdkit": "^2025.3.4-1.0.0",
+    "openchemlib": "^9.24.0",
     "three": "^0.169.0"
   }
 }

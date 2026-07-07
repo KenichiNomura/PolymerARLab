@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { aiRecognitionEndpoint, recognizeSketchWithAI } from "./aiRecognition";
+import { preloadConformerResources, templateTo3D } from "./conformer3d";
 import { getElementInfo } from "./elements";
 import { GraphMoleculeRenderer } from "./graphMoleculeRenderer";
 import {
@@ -361,7 +363,7 @@ function getActiveTemplate(id: string): PolymerTemplate {
   return getTemplate(id);
 }
 
-async function loadImportedStructure() {
+async function loadImportedStructure(): Promise<boolean> {
   loadStructureBtn.disabled = true;
   try {
     const requestedFormat = structureFormat.value as StructureImportFormat;
@@ -386,10 +388,12 @@ async function loadImportedStructure() {
     const countsMessage = `${importedMessage} ${importedTemplate.atoms.length} atoms, ${importedTemplate.bonds.length} bonds.`;
     setImportStatus([...normalized.messages, countsMessage, ...importWarnings].join(" "));
     setStatus(`Verification target: imported ${result.detectedFormat.toUpperCase()} structure.`);
+    return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setImportStatus(message);
     setStatus(`Import failed: ${message}`, true);
+    return false;
   } finally {
     pendingExampleRepeatCount = null;
     loadStructureBtn.disabled = false;
@@ -424,6 +428,15 @@ async function normalizeWithChemistryFallback(
         input,
         format,
         messages: [`RDKit.js unavailable; used lightweight parser. ${error.message}`],
+      };
+    }
+    if (error instanceof RDKitImportError && error.kind === "validation") {
+      // Chemically invalid structures still import so students can see the
+      // drawing rendered and read the valence warnings (the teaching moment).
+      return {
+        input,
+        format,
+        messages: [`RDKit.js rejected this structure (${error.message}); imported permissively - check the valence warnings.`],
       };
     }
     throw error;
@@ -478,9 +491,9 @@ function rebuildGraph() {
     polymerSelect.value = POLYMER_TEMPLATES[0].id;
   }
   const activeTemplate = getActiveTemplate(polymerSelect.value);
-  currentTemplate = cleanupTemplateGeometry(activeTemplate, {
-    mode: isPolymerMode() ? "polymer" : "molecule",
-  });
+  const mode = isPolymerMode() ? "polymer" : "molecule";
+  // Real 3D conformer first (openchemlib); heuristic VSEPR layout as fallback.
+  currentTemplate = templateTo3D(activeTemplate, { mode }) ?? cleanupTemplateGeometry(activeTemplate, { mode });
   repeatRange.max = String(currentTemplate.maxRepeats);
   if (Number(repeatRange.value) > currentTemplate.maxRepeats) {
     repeatRange.value = String(currentTemplate.maxRepeats);
@@ -826,6 +839,27 @@ function updateScanPreview() {
 }
 
 async function runSketchRecognition(source: RecognitionSource) {
+  const endpoint = aiRecognitionEndpoint();
+  if (endpoint) {
+    setStatus("AI recognition (Claude) in progress...");
+    try {
+      const ai = await recognizeSketchWithAI(scanCanvas, endpoint);
+      polymerModeToggle.checked = ai.isRepeatUnit;
+      updateStructureModeUi();
+      structureFormat.value = "smiles";
+      structureInput.value = ai.smiles;
+      if (ai.isRepeatUnit && ai.repeatCount > 0) pendingExampleRepeatCount = ai.repeatCount;
+      const imported = await loadImportedStructure();
+      if (!imported) throw new Error(`the recognized SMILES "${ai.smiles}" did not import`);
+      const notes = ai.notes.length > 0 ? ` ${ai.notes.join(" ")}` : "";
+      setStatus(`AI recognition: ${ai.smiles} (confidence ${(ai.confidence * 100).toFixed(0)}%).${notes}`, ai.notes.length > 0);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`AI recognition unavailable (${message}) - trying on-device recognizer...`, true);
+    }
+  }
+
   setStatus("Recognizing sketch...");
   try {
     const recognized = await recognizeSketch(scanCanvas, source);
@@ -960,6 +994,16 @@ if (three) {
 }
 
 updatePlatformStatus();
+
+// 3D conformer resources load in the background; structures render with the
+// VSEPR layout immediately and upgrade to real conformers once ready.
+void preloadConformerResources()
+  .then(() => {
+    rebuildGraph();
+  })
+  .catch((error) => {
+    console.warn("Conformer resources unavailable; keeping VSEPR layout.", error);
+  });
 
 setImportStatus("Loading RDKit.js chemistry...");
 void preloadRDKit()

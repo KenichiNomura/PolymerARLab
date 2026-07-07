@@ -48,6 +48,7 @@ interface Glyph {
   component: InkComponent;
   char: string;
   score: number;
+  alternates?: Array<{ char: string; score: number }>;
 }
 
 interface AtomLabel {
@@ -87,7 +88,12 @@ export function recognizeSketchImage(image: ImageData, source: RecognitionSource
 
   let glyphs = letterComponents.map((component) => classifyGlyph(component, mask, image.width));
   const { adopted, remainingLines } = adoptLowercaseStems(glyphs, lineComponents);
-  glyphs = [...glyphs, ...adopted];
+
+  // Letters are often drawn with strokes that do not touch (an H as a bar
+  // plus a t-shape). Merge nearby parts when the combined shape reads as a
+  // letter more convincingly than any part does alone.
+  const merged = mergeMultiStrokeGlyphs(glyphs, remainingLines, mask, image.width);
+  glyphs = [...merged.glyphs, ...adopted];
 
   // Connected strokes (bonds meeting at a vertex, zigzag chains) form blobs
   // that classify poorly as letters; decompose those into line segments.
@@ -108,7 +114,7 @@ export function recognizeSketchImage(image: ImageData, source: RecognitionSource
   );
 
   const labels = buildAtomLabels(glyphs, warnings);
-  const segments = [...remainingLines.map(componentToSegment), ...decomposedSegments];
+  const segments = [...merged.lines.map(componentToSegment), ...decomposedSegments];
   const bondGroups = groupParallelSegments(segments);
 
   const { atoms, bonds } = assembleGraph(labels, bondGroups, warnings);
@@ -154,6 +160,13 @@ export function debugSketchAnalysis(image: ImageData) {
       score: Number(glyph.score.toFixed(3)),
       bbox: [glyph.component.minX, glyph.component.minY, glyph.component.maxX, glyph.component.maxY],
       holes: glyph.component.holes,
+      alternates: glyph.alternates,
+    })),
+    merged: mergeMultiStrokeGlyphs(glyphs, lineComponents, mask, image.width).glyphs.map((glyph) => ({
+      char: glyph.char,
+      score: Number(glyph.score.toFixed(3)),
+      bbox: [glyph.component.minX, glyph.component.minY, glyph.component.maxX, glyph.component.maxY],
+      alternates: glyph.alternates,
     })),
     lineCount: lineComponents.length,
     bentCount: bentStrokes.length,
@@ -500,6 +513,82 @@ function glyphSize(glyph: Glyph) {
   return Math.max(glyph.component.width, glyph.component.height);
 }
 
+// --- Multi-stroke letter grouping ---
+
+// Merged shapes must read as one of these; lowercase stems and I are single
+// strokes, so a merge producing them is spurious.
+const MERGEABLE_CHARS = new Set(["C", "H", "O", "N", "S", "P", "F", "B"]);
+
+function mergeMultiStrokeGlyphs(
+  glyphs: Glyph[],
+  lineComponents: InkComponent[],
+  mask: Uint8Array,
+  width: number,
+): { glyphs: Glyph[]; lines: InkComponent[] } {
+  interface Part {
+    component: InkComponent;
+    glyph: Glyph | null;
+  }
+  const parts: Part[] = [
+    ...glyphs.map((glyph) => ({ component: glyph.component, glyph: glyph as Glyph | null })),
+    ...lineComponents.map((component) => ({ component, glyph: null })),
+  ];
+
+  for (let pass = 0; pass < 6; pass++) {
+    let best: { a: number; b: number; glyph: Glyph } | null = null;
+
+    for (let a = 0; a < parts.length; a++) {
+      for (let b = a + 1; b < parts.length; b++) {
+        const candidate = tryMergeParts(parts[a], parts[b], mask, width);
+        if (candidate && (!best || candidate.score > best.glyph.score)) {
+          best = { a, b, glyph: candidate };
+        }
+      }
+    }
+
+    if (!best) break;
+    const mergedPart: Part = { component: best.glyph.component, glyph: best.glyph };
+    const keep = parts.filter((_, index) => index !== best!.a && index !== best!.b);
+    parts.length = 0;
+    parts.push(...keep, mergedPart);
+  }
+
+  return {
+    glyphs: parts.filter((part) => part.glyph).map((part) => part.glyph!),
+    lines: parts.filter((part) => !part.glyph).map((part) => part.component),
+  };
+}
+
+function tryMergeParts(a: { component: InkComponent; glyph: Glyph | null }, b: { component: InkComponent; glyph: Glyph | null }, mask: Uint8Array, width: number): Glyph | null {
+  const compA = a.component;
+  const compB = b.component;
+
+  // Two roughly parallel strokes are a multi-bond candidate, never a letter.
+  if (!a.glyph && !b.glyph) {
+    if (angleDistance(compA.angle, compB.angle) < 0.35) return null;
+  }
+
+  const maxDim = Math.max(compA.width, compA.height, compB.width, compB.height);
+  const gapX = Math.max(0, compB.minX - compA.maxX, compA.minX - compB.maxX);
+  const gapY = Math.max(0, compB.minY - compA.maxY, compA.minY - compB.maxY);
+  if (gapX > maxDim * 0.3 || gapY > maxDim * 0.3) return null;
+
+  const unionWidth = Math.max(compA.maxX, compB.maxX) - Math.min(compA.minX, compB.minX) + 1;
+  const unionHeight = Math.max(compA.maxY, compB.maxY) - Math.min(compA.minY, compB.minY) + 1;
+  const aspect = unionWidth / unionHeight;
+  // Side-by-side letters of neighboring atoms union into wide shapes;
+  // letter-like unions stay roughly square.
+  if (aspect < 0.45 || aspect > 1.55) return null;
+
+  const mergedComponent = mergeComponents([compA, compB], width);
+  const mergedGlyph = classifyGlyph(mergedComponent, mask, width);
+  if (!MERGEABLE_CHARS.has(mergedGlyph.char)) return null;
+
+  const baseline = Math.max(a.glyph?.score ?? 0, b.glyph?.score ?? 0);
+  if (mergedGlyph.score < 0.62 || mergedGlyph.score < baseline + 0.03) return null;
+  return mergedGlyph;
+}
+
 // --- Glyph classification ---
 
 let templateCache: Array<{ char: string; holes: number; vector: Float32Array }> | null = null;
@@ -513,23 +602,28 @@ function glyphTemplates() {
   canvas.height = 96;
   const context = canvas.getContext("2d", { willReadFrequently: true })!;
 
-  const variants: Array<[string, string, number]> = [];
+  const variants: Array<[string, string, number, number]> = [];
   for (const font of TEMPLATE_FONTS) {
     for (const weight of ["bold", "normal"]) {
       for (const rotation of TEMPLATE_ROTATIONS) {
-        variants.push([font, weight, rotation]);
+        // Horizontal squeeze approximates tall narrow handwriting (a lean
+        // handwritten O must not lose to P on aspect alone).
+        for (const squeeze of [1, 0.7]) {
+          variants.push([font, weight, rotation, squeeze]);
+        }
       }
     }
   }
 
   for (const char of GLYPH_CHARS) {
-    for (const [font, weight, rotation] of variants) {
+    for (const [font, weight, rotation, squeeze] of variants) {
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.fillStyle = "#fff";
       context.fillRect(0, 0, 96, 96);
       context.fillStyle = "#000";
       context.translate(48, 48);
       context.rotate(rotation);
+      context.scale(squeeze, 1);
       context.font = `${weight} 56px "${font}", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
@@ -539,7 +633,7 @@ function glyphTemplates() {
       const mask = binarize(image);
       const components = findComponents(mask, 96, 96).filter((component) => component.area >= MIN_COMPONENT_AREA);
       if (components.length === 0) continue;
-      const merged = mergeComponents(components);
+      const merged = mergeComponents(components, 96);
       templateCache.push({
         char,
         holes: merged.holes,
@@ -550,23 +644,28 @@ function glyphTemplates() {
   return templateCache;
 }
 
-// Glyphs drawn with two strokes (an H whose crossbar does not touch, for
-// example) arrive as one component here only if connected; templates can also
-// split (Courier I serifs). Merge into a single pseudo-component.
-function mergeComponents(components: InkComponent[]): InkComponent {
+// Merge disconnected strokes into a single pseudo-component (used both for
+// multi-part font templates and for multi-stroke handwriting). Holes are
+// recomputed on the union because separate arcs can enclose new regions.
+function mergeComponents(components: InkComponent[], width: number): InkComponent {
   if (components.length === 1) return components[0];
   const total = components.reduce((sum, component) => sum + component.area, 0);
+  const pixels = concatPixels(components);
+  const minX = Math.min(...components.map((component) => component.minX));
+  const minY = Math.min(...components.map((component) => component.minY));
+  const maxX = Math.max(...components.map((component) => component.maxX));
+  const maxY = Math.max(...components.map((component) => component.maxY));
   const merged: InkComponent = {
     ...components[0],
-    pixels: concatPixels(components),
+    pixels,
     area: total,
-    minX: Math.min(...components.map((component) => component.minX)),
-    minY: Math.min(...components.map((component) => component.minY)),
-    maxX: Math.max(...components.map((component) => component.maxX)),
-    maxY: Math.max(...components.map((component) => component.maxY)),
+    minX,
+    minY,
+    maxX,
+    maxY,
     cx: components.reduce((sum, component) => sum + component.cx * component.area, 0) / total,
     cy: components.reduce((sum, component) => sum + component.cy * component.area, 0) / total,
-    holes: components.reduce((sum, component) => sum + component.holes, 0),
+    holes: countHoles(pixels, minX, minY, maxX, maxY, width),
   };
   merged.width = merged.maxX - merged.minX + 1;
   merged.height = merged.maxY - merged.minY + 1;
@@ -620,18 +719,74 @@ function rasterizeComponent(component: InkComponent, mask: Uint8Array, width: nu
 
 function classifyGlyph(component: InkComponent, mask: Uint8Array, width: number): Glyph {
   const vector = rasterizeComponent(component, mask, width);
-  let bestChar = "C";
-  let bestScore = 0;
+  const bestByChar = new Map<string, number>();
 
   for (const template of glyphTemplates()) {
     let score = cosineSimilarity(vector, template.vector);
     if (template.holes !== component.holes) score *= 0.72;
-    if (score > bestScore) {
-      bestScore = score;
-      bestChar = template.char;
+    if (score > (bestByChar.get(template.char) ?? 0)) bestByChar.set(template.char, score);
+  }
+
+  const ranked = [...bestByChar.entries()].sort((a, b) => b[1] - a[1]);
+  let [bestChar, bestScore] = ranked[0] ?? ["C", 0];
+
+  // H and N differ mainly in their connector: a crossbar stays shallow (even
+  // slanted handwriting rarely exceeds ~35 degrees) while N's diagonal is
+  // steep. Template cosine barely separates sloppy handwriting, so measure
+  // the connector's slope directly on near-ties, ignoring vertical stems.
+  const topTwo = new Set(ranked.slice(0, 2).map(([char]) => char));
+  if (topTwo.has("H") && topTwo.has("N") && Math.abs(ranked[0][1] - ranked[1][1]) < 0.08) {
+    const slope = connectorSlope(vector);
+    if (slope != null) {
+      bestChar = Math.abs(slope) <= 1.05 ? "H" : "N";
+      bestScore = bestByChar.get(bestChar) ?? bestScore;
     }
   }
-  return { component, char: bestChar, score: bestScore };
+
+  return {
+    component,
+    char: bestChar,
+    score: bestScore,
+    alternates: ranked.slice(0, 3).map(([char, score]) => ({ char, score: Number(score.toFixed(3)) })),
+  };
+}
+
+// Slope (grid rows per column) of the connector across the middle band of
+// the glyph. Columns whose ink spans most of the height are vertical stems
+// passing through the band (an H written like "It") and are excluded; the
+// remaining ink is the crossbar (shallow) or N-diagonal (steep).
+function connectorSlope(vector: Float32Array): number | null {
+  const colStart = Math.floor(GRID * 0.3);
+  const colEnd = Math.ceil(GRID * 0.7);
+  const points: Array<{ x: number; y: number }> = [];
+  for (let gx = colStart; gx < colEnd; gx++) {
+    let minRow = Infinity;
+    let maxRow = -Infinity;
+    let sum = 0;
+    let count = 0;
+    for (let gy = 0; gy < GRID; gy++) {
+      if (vector[gy * GRID + gx] > 0) {
+        minRow = Math.min(minRow, gy);
+        maxRow = Math.max(maxRow, gy);
+        sum += gy;
+        count += 1;
+      }
+    }
+    if (count === 0) continue;
+    if (maxRow - minRow + 1 > GRID * 0.55) continue;
+    points.push({ x: gx, y: sum / count });
+  }
+  if (points.length < 3) return null;
+
+  const meanX = average(points.map((point) => point.x));
+  const meanY = average(points.map((point) => point.y));
+  let numerator = 0;
+  let denominator = 0;
+  for (const point of points) {
+    numerator += (point.x - meanX) * (point.y - meanY);
+    denominator += (point.x - meanX) ** 2;
+  }
+  return denominator > 0 ? numerator / denominator : null;
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
@@ -980,13 +1135,29 @@ function assembleGraph(labels: AtomLabel[], bondGroups: Segment[][], warnings: s
   let implicitCount = 0;
   const bonds: RecognizedBond[] = [];
 
-  const attach = (point: Point, medianLength: number): AtomLabel => {
+  const attach = (point: Point, direction: Point, segmentLength: number, medianLength: number): AtomLabel => {
+    // Bonds are drawn pointing at their atoms: prefer the nearest label along
+    // the stroke's own axis, which bridges the wide gaps students leave.
     let best: AtomLabel | null = null;
+    let bestAxial = Infinity;
+    for (const label of allLabels) {
+      if (label.implicit) continue;
+      const dx = label.center.x - point.x;
+      const dy = label.center.y - point.y;
+      const axial = dx * direction.x + dy * direction.y;
+      const perpendicular = Math.abs(-direction.y * dx + direction.x * dy);
+      const withinReach = axial > -label.radius * 0.4 && axial < 2.5 * Math.max(segmentLength, 30);
+      if (withinReach && perpendicular < label.radius * 0.9 + 14 && axial < bestAxial) {
+        best = label;
+        bestAxial = axial;
+      }
+    }
+    if (best) return best;
+
     let bestDistance = Infinity;
     for (const label of allLabels) {
       const distance = Math.hypot(point.x - label.center.x, point.y - label.center.y);
-      // Students leave sizeable gaps between bond strokes and letters, so the
-      // reach has to cover roughly half the inter-atom spacing.
+      // Radial fallback also merges endpoints into implicit junction atoms.
       const reach = label.implicit ? Math.max(14, medianLength * 0.3) : label.radius + Math.max(20, medianLength * 0.6);
       if (distance < reach && distance < bestDistance) {
         best = label;
@@ -1012,8 +1183,13 @@ function assembleGraph(labels: AtomLabel[], bondGroups: Segment[][], warnings: s
 
   bondGroups.forEach((group, index) => {
     const representative = averageSegment(group);
-    const from = attach(representative.start, medianLength);
-    const to = attach(representative.end, medianLength);
+    const length = Math.max(1, representative.length);
+    const axis = {
+      x: (representative.end.x - representative.start.x) / length,
+      y: (representative.end.y - representative.start.y) / length,
+    };
+    const from = attach(representative.start, { x: -axis.x, y: -axis.y }, representative.length, medianLength);
+    const to = attach(representative.end, axis, representative.length, medianLength);
     if (from === to) {
       warnings.push("A bond stroke could not be connected between two atoms and was skipped.");
       return;

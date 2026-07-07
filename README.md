@@ -84,16 +84,55 @@ import pipeline, then flows through validation, VSEPR cleanup, rendering, and AR
 The current roadmap is tracked in
 [`docs/ar-webapp-plan.md`](docs/ar-webapp-plan.md).
 
-Camera capture and image upload run a browser-side recognizer for clean
-black-marker Lewis structures (`src/sketchRecognition.ts`): letters classify
-against font templates, strokes become bonds (including double/triple pairs
-and skeletal implicit carbons), and results land in editable graph JSON with
-confidence and warnings before the 3D model is generated.
+Camera capture and image upload support two recognition engines:
+
+1. **AI recognition (optional, most accurate):** the sketch photo is sent to a
+   small Cloudflare Worker you deploy (`worker/`), which asks Claude (vision)
+   to transcribe the drawing to SMILES — preserving the student's chemistry
+   mistakes so the valence checker can flag them. See "AI Recognition Setup".
+2. **On-device recognizer (always available, offline):** a classical
+   computer-vision pipeline (`src/sketchRecognition.ts`) for clean marker
+   sketches — letters classify against font templates, strokes become bonds,
+   skeletal junctions become implicit carbons.
+
+The AI engine is used when configured and falls back to the on-device engine
+when offline or undeployed.
+
+## 3D Structure Generation
+
+All structures (presets, imports, scans) are embedded in real 3D with
+openchemlib's torsion-library conformer generator (`src/conformer3d.ts`):
+water is bent, methane is tetrahedral, rings are planar, and polymer repeat
+units are aligned along the chain axis. The previous VSEPR heuristics
+(`src/vseprGeometry.ts`) remain as an instant fallback while the conformer
+resources (`public/vendor/openchemlib/resources.json`) load, and for
+structures openchemlib cannot parse.
+
+## AI Recognition Setup (optional)
+
+The static site never holds an API key; a Cloudflare Worker proxies to the
+Claude API:
+
+```bash
+cd worker
+npm install
+npx wrangler login                     # once, opens browser
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler deploy                    # prints your workers.dev URL
+```
+
+Then point the app at the Worker either by setting `DEFAULT_AI_ENDPOINT` in
+`src/aiRecognition.ts` (and redeploying the site) or per-device by opening
+`https://<your-site>/?ai=https://<your-worker>.workers.dev` once (persisted in
+localStorage; `?ai=off` clears it). The Worker's `ALLOWED_ORIGINS` var in
+`worker/wrangler.toml` must list your site origin. Model defaults to
+`claude-opus-4-8`; set the `MODEL` var to `claude-haiku-4-5` for ~5x cheaper
+scans. Note the endpoint is callable by anyone who can reach it — fine for
+classroom scale; add a token check in `worker/src/index.ts` if abused.
 
 Near-term work:
 
-- tune recognition against real photographed handwriting;
-- add ring, aromatic-circle, and polymer-bracket detection;
+- test AI recognition against varied real handwriting;
 - test AR placement on physical Android and iPhone devices;
 - add USDZ/Quick Look export for native iOS AR preview.
 

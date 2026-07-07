@@ -52,8 +52,17 @@ and end atoms after recognition if the scanner cannot infer them confidently.
 
 ## Current Implementation
 
-`src/sketchRecognition.ts` implements the MVP recognizer with classical
-browser-side computer vision (no model download):
+Recognition has two engines. The primary engine (when configured) is **AI
+recognition**: the sketch photo goes to a Cloudflare Worker (`worker/`) that
+asks Claude (vision) for a SMILES transcription with structured output
+(`smiles`, `is_repeat_unit`, `repeat_count`, `notes`, `confidence`). The
+transcription preserves chemistry mistakes as drawn; the SMILES imports
+through the standard pipeline (permissively when RDKit rejects invalid
+valence), and the app's valence checker flags the errors. The browser client
+is `src/aiRecognition.ts`.
+
+The offline fallback is `src/sketchRecognition.ts`, an MVP recognizer with
+classical browser-side computer vision (no model download):
 
 1. Otsu binarization of the captured frame (downscaled to <=720px).
 2. Connected-component analysis with PCA elongation and hole counting.
