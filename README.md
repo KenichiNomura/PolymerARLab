@@ -124,7 +124,8 @@ npx wrangler deploy                    # prints your workers.dev URL
 Then point the app at the Worker either by setting `DEFAULT_AI_ENDPOINT` in
 `src/aiRecognition.ts` (and redeploying the site) or per-device by opening
 `https://<your-site>/?ai=https://<your-worker>.workers.dev` once (persisted in
-localStorage; `?ai=off` clears it). The Worker's `ALLOWED_ORIGINS` var in
+localStorage; `?ai=off` disables AI recognition on that device and
+`?ai=default` restores the built-in endpoint). The Worker's `ALLOWED_ORIGINS` var in
 `worker/wrangler.toml` must list your site origin. Model defaults to
 `claude-opus-4-8`; set the `MODEL` var to `claude-haiku-4-5` for ~5x cheaper
 scans. Note the endpoint is callable by anyone who can reach it — fine for

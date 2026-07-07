@@ -19,18 +19,20 @@ export interface AIRecognitionResult {
   model: string;
 }
 
-// The endpoint can be provided three ways (highest priority first):
-// a ?ai=<url> query parameter (persisted), localStorage, or the baked-in
-// default. `?ai=off` clears the stored override.
+// The endpoint can be provided three ways (highest priority first): a
+// ?ai=<url> query parameter (persisted), localStorage, or the baked-in
+// default. `?ai=off` disables AI recognition (persisted) and `?ai=default`
+// restores the baked-in endpoint.
 export function aiRecognitionEndpoint(): string {
   try {
     const fromQuery = new URLSearchParams(window.location.search).get("ai");
-    if (fromQuery === "off") {
+    if (fromQuery === "default") {
       localStorage.removeItem(ENDPOINT_STORAGE_KEY);
     } else if (fromQuery) {
       localStorage.setItem(ENDPOINT_STORAGE_KEY, fromQuery);
     }
-    return localStorage.getItem(ENDPOINT_STORAGE_KEY) ?? DEFAULT_AI_ENDPOINT;
+    const value = localStorage.getItem(ENDPOINT_STORAGE_KEY) ?? DEFAULT_AI_ENDPOINT;
+    return value === "off" ? "" : value;
   } catch {
     return DEFAULT_AI_ENDPOINT;
   }

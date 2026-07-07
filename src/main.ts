@@ -971,6 +971,9 @@ function drawFallbackBond(
   return `${lines}<line x1="${(start.x + nx * 1.1).toFixed(1)}" y1="${(start.y + ny * 1.1).toFixed(1)}" x2="${(end.x + nx * 1.1).toFixed(1)}" y2="${(end.y + ny * 1.1).toFixed(1)}" stroke="${color}" stroke-width="1.8" stroke-linecap="round" opacity="0.8"/>`;
 }
 
+// Persist any ?ai=<url>/off/default endpoint choice from the URL on load.
+aiRecognitionEndpoint();
+
 updateStructureModeUi();
 rebuildGraph();
 three = initThreeRuntime();

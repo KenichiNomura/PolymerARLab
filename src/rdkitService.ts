@@ -40,7 +40,7 @@ export interface RDKitStatus {
 
 export interface RDKitNormalization {
   input: string;
-  format: "molfile";
+  format: StructureImportFormat;
   messages: string[];
 }
 
@@ -73,8 +73,20 @@ export async function normalizeStructureWithRDKit(
 
     const hadCoords = mol.has_coords();
     const molblock = molfileWithCoordinates(mol, hadCoords);
-    const canonicalSmiles = safeCall(() => mol?.get_smiles() ?? "");
     const label = inputLabel(source, format);
+
+    // RDKit folds explicit hydrogens into implicit ones, which can collapse
+    // small molecules like [H]O[H] below the two atoms the viewer needs.
+    // Keep the original input for the permissive parser in that case.
+    if (molblockAtomCount(molblock) < 2) {
+      return {
+        input: source,
+        format,
+        messages: ["RDKit.js merged the explicit hydrogens away; used the lightweight parser to keep them visible."],
+      };
+    }
+
+    const canonicalSmiles = safeCall(() => mol?.get_smiles() ?? "");
     const messages = [
       `RDKit.js ${module.version()} accepted ${label}.`,
       hadCoords ? "Used supplied 2D coordinates." : "Generated 2D coordinates in the browser.",
@@ -162,6 +174,12 @@ function withMolblockName(molblock: string, name: string) {
   const lines = molblock.split("\n");
   lines[0] = name.slice(0, 80);
   return lines.join("\n");
+}
+
+function molblockAtomCount(molblock: string) {
+  const lines = molblock.replace(/\r/g, "").split("\n");
+  const countsLine = lines.find((line) => line.includes("V2000")) ?? "";
+  return Number(countsLine.trim().split(/\s+/)[0]) || 0;
 }
 
 function requireMolblock(value: string) {
