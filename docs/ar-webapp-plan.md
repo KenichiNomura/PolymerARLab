@@ -33,6 +33,9 @@ Completed:
 - Added GitHub Pages deployment workflow and relative production asset paths.
 - Added a handwritten scanner graph contract for the future recognition pipeline.
 - Validated desktop and phone-sized rendering with build and screenshot checks.
+- Enabled GitHub Pages for the repository and verified the hosted build loads RDKit.js and imports SMILES end to end (July 7, 2026).
+- Hardened import validation messages: supported-atom lists in errors, invalid bond orders rejected instead of silently coerced, attachment-point fallbacks reported, and Molfile header names parsed correctly (SMILES imports keep the typed SMILES as the display name).
+- Connected camera capture and image upload to the scanner graph contract with a demo recognition fixture, including image-to-model coordinate normalization.
 
 ## Recommended Architecture
 
@@ -230,9 +233,11 @@ Draw or select a polystyrene repeat unit
 
 ## Immediate Next Step
 
-Continue improving the structure input pipeline before handwritten recognition:
+The structure input pipeline is verified end to end (hosted RDKit.js, hardened
+validation messages, capture/upload wired to the scanner contract via a demo
+recognizer). Next:
 
-1. Test the static GitHub Pages build with RDKit.js loading.
-2. Add clearer validation messages for unsupported atoms, missing attachment points, or invalid bond orders.
-3. Connect camera/image capture to the scanner graph contract.
-4. Add handwritten recognition only after typed/imported structures feel reliable.
+1. Replace the demo recognizer in `src/scannerPipeline.ts` with first real recognition, starting with clean black-marker structures on white paper.
+2. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
+3. Add USDZ/Quick Look export for native iOS AR preview (Phase 3).
+4. Start Phase 5 packaging: PWA manifest, saved examples, shareable links.

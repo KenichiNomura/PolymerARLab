@@ -84,12 +84,14 @@ import pipeline, then flows through validation, VSEPR cleanup, rendering, and AR
 The current roadmap is tracked in
 [`docs/ar-webapp-plan.md`](docs/ar-webapp-plan.md).
 
-Near-term work before handwritten scanning:
+Camera capture and image upload now flow through the scanner contract using a
+demo recognition fixture, so the scan-to-structure path is testable end to end.
 
-- harden validation messages for unsupported atoms and polymer links;
-- test hosted RDKit loading from GitHub Pages;
-- connect camera/image capture to the scanner contract;
-- add recognition in small steps, starting with clean black-marker structures.
+Near-term work:
+
+- add real recognition in small steps, starting with clean black-marker structures;
+- test AR placement on physical Android and iPhone devices;
+- add USDZ/Quick Look export for native iOS AR preview.
 
 ## License
 

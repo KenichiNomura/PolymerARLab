@@ -39,9 +39,11 @@ interface ParsedStructure {
   rightAttachmentAtomId?: string;
   atoms: ParsedAtom[];
   bonds: ParsedBond[];
+  warnings?: string[];
 }
 
 const SUPPORTED_ATOMS = new Set<AtomSymbol>(["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "I"]);
+const SUPPORTED_ATOM_LIST = [...SUPPORTED_ATOMS].join(", ");
 
 export function importStructure(
   rawInput: string,
@@ -61,10 +63,11 @@ export function importStructure(
         ? parseMolfile(source)
         : parseSmiles(source);
 
+  const attachmentNotes: string[] = [];
   return {
-    template: buildTemplate(parsed, attachments),
+    template: buildTemplate(parsed, attachments, attachmentNotes),
     detectedFormat,
-    messages: [`Imported ${detectedFormat.toUpperCase()} repeat unit.`],
+    messages: [`Imported ${detectedFormat.toUpperCase()} repeat unit.`, ...(parsed.warnings ?? []), ...attachmentNotes],
   };
 }
 
@@ -124,25 +127,42 @@ function parseGraphJson(source: string): ParsedStructure {
   });
 
   const bonds = bondsInput.map((item: any, index: number): ParsedBond => {
-    const a = idMap.get(String(item.a ?? item.from ?? item.source));
-    const b = idMap.get(String(item.b ?? item.to ?? item.target));
-    if (!a || !b) throw new Error(`Bond ${index + 1} references an unknown atom.`);
+    const rawA = String(item.a ?? item.from ?? item.source);
+    const rawB = String(item.b ?? item.to ?? item.target);
+    const a = idMap.get(rawA);
+    const b = idMap.get(rawB);
+    if (!a || !b) {
+      throw new Error(`Bond ${index + 1} references unknown atom "${!a ? rawA : rawB}". Check the bond's "a"/"b" atom ids.`);
+    }
     return {
       id: sanitizeId(String(item.id ?? `b${index + 1}`), `b${index + 1}`),
       a,
       b,
-      order: normalizeBondOrder(item.order ?? 1),
+      order: normalizeBondOrder(item.order ?? 1, `bond ${index + 1}`),
     };
   });
+
+  const warnings: string[] = [];
+  const declaredLeft = parsed.leftAttachmentAtomId ?? parsed.leftAttachment;
+  const declaredRight = parsed.rightAttachmentAtomId ?? parsed.rightAttachment;
+  const leftAttachmentAtomId = idMap.get(String(declaredLeft ?? ""));
+  const rightAttachmentAtomId = idMap.get(String(declaredRight ?? ""));
+  if (declaredLeft != null && !leftAttachmentAtomId) {
+    warnings.push(`Left attachment atom "${declaredLeft}" was not found in the atoms list; the leftmost atom will be used instead.`);
+  }
+  if (declaredRight != null && !rightAttachmentAtomId) {
+    warnings.push(`Right attachment atom "${declaredRight}" was not found in the atoms list; the rightmost atom will be used instead.`);
+  }
 
   return {
     name: typeof parsed.name === "string" ? parsed.name : undefined,
     repeatLabel: typeof parsed.repeatLabel === "string" ? parsed.repeatLabel : undefined,
     defaultRepeats: numberOrUndefined(parsed.degreeOfPolymerization ?? parsed.defaultRepeats),
-    leftAttachmentAtomId: idMap.get(String(parsed.leftAttachmentAtomId ?? parsed.leftAttachment ?? "")),
-    rightAttachmentAtomId: idMap.get(String(parsed.rightAttachmentAtomId ?? parsed.rightAttachment ?? "")),
+    leftAttachmentAtomId,
+    rightAttachmentAtomId,
     atoms,
     bonds,
+    warnings,
   };
 }
 
@@ -184,15 +204,24 @@ function parseMolfile(source: string): ParsedStructure {
       id: `b${index + 1}`,
       a,
       b,
-      order: normalizeBondOrder(Number(fields[2])),
+      order: normalizeBondOrder(Number(fields[2]), `Molfile bond line ${index + 1}`),
     });
   }
 
   return {
-    name: lines[0]?.trim() || "Imported Molfile",
+    name: molfileName(lines, countsIndex),
     atoms,
     bonds,
   };
+}
+
+function molfileName(lines: string[], countsIndex: number) {
+  // A full V2000 header is: name, program, comment, counts. When the leading
+  // blank name line was trimmed away, lines[0] is the program line (for
+  // example "     RDKit          2D"), which should not become the name.
+  if (countsIndex < 3) return "Imported Molfile";
+  const name = lines[0]?.trim();
+  return name || "Imported Molfile";
 }
 
 function parseSmiles(source: string): ParsedStructure {
@@ -271,7 +300,9 @@ function parseSmiles(source: string): ParsedStructure {
 
     const parsedAtom = readSmilesAtom(source, index);
     if (!parsedAtom) {
-      throw new Error(`Unsupported SMILES token "${char}".`);
+      throw new Error(
+        `Unsupported SMILES token "${char}" at position ${index + 1}. Supported atoms: ${SUPPORTED_ATOM_LIST}; bonds: - = # :; branches ( ); ring closures 0-9.`,
+      );
     }
 
     const atomId = `a${atoms.length + 1}`;
@@ -332,7 +363,7 @@ function readSmilesAtom(source: string, index: number): { element: AtomSymbol; a
   return null;
 }
 
-function buildTemplate(parsed: ParsedStructure, attachments: AttachmentSelection): PolymerTemplate {
+function buildTemplate(parsed: ParsedStructure, attachments: AttachmentSelection, notes: string[] = []): PolymerTemplate {
   validateParsedStructure(parsed);
   const positionedAtoms = withPositions(parsed.atoms, parsed.bonds);
   const atomIds = new Set(positionedAtoms.map((atom) => atom.id));
@@ -348,7 +379,24 @@ function buildTemplate(parsed: ParsedStructure, attachments: AttachmentSelection
       ? parsed.rightAttachmentAtomId
       : defaultAttachments.rightAtomId;
 
-  if (leftAtomId === rightAtomId) throw new Error("Imported repeat unit needs two different attachment atoms.");
+  if (leftAtomId === rightAtomId) {
+    throw new Error(
+      `Imported repeat unit needs two different attachment atoms (both resolved to "${leftAtomId}"). Pick distinct left/right connection atoms.`,
+    );
+  }
+
+  const leftDefaulted = !atomIds.has(attachments.leftAtomId ?? "") && !(parsed.leftAttachmentAtomId && atomIds.has(parsed.leftAttachmentAtomId));
+  const rightDefaulted = !atomIds.has(attachments.rightAtomId ?? "") && !(parsed.rightAttachmentAtomId && atomIds.has(parsed.rightAttachmentAtomId));
+  const wantsPolymerAttachments =
+    attachments.leftAtomId != null ||
+    attachments.rightAtomId != null ||
+    parsed.leftAttachmentAtomId != null ||
+    parsed.rightAttachmentAtomId != null ||
+    parsed.defaultRepeats != null;
+  if (wantsPolymerAttachments && (leftDefaulted || rightDefaulted)) {
+    const sides = [leftDefaulted ? `left ${leftAtomId}` : "", rightDefaulted ? `right ${rightAtomId}` : ""].filter(Boolean).join(", ");
+    notes.push(`Repeat-unit connection auto-selected (${sides}). Adjust it with the connection selectors if needed.`);
+  }
 
   const atoms: TemplateAtom[] = positionedAtoms.map((atom) => ({
     id: atom.id,
@@ -535,19 +583,23 @@ function inferDefaultBond(a?: ParsedAtom, b?: ParsedAtom): BondOrder {
 
 function normalizeElement(value: string): AtomSymbol {
   const raw = value.trim();
+  if (!raw) throw new Error(`Missing element symbol. Supported atoms: ${SUPPORTED_ATOM_LIST}.`);
   const aromatic = raw.toLowerCase();
   const normalized = aromatic.length === 1 && "cnosp".includes(aromatic)
     ? (aromatic.toUpperCase() as AtomSymbol)
     : (raw[0]?.toUpperCase() + raw.slice(1).toLowerCase()) as AtomSymbol;
-  if (!SUPPORTED_ATOMS.has(normalized)) throw new Error(`Unsupported atom "${value}".`);
+  if (!SUPPORTED_ATOMS.has(normalized)) {
+    throw new Error(`Unsupported atom "${value}". Supported atoms: ${SUPPORTED_ATOM_LIST}.`);
+  }
   return normalized;
 }
 
-function normalizeBondOrder(value: unknown): BondOrder {
+function normalizeBondOrder(value: unknown, context: string): BondOrder {
   if (value === "aromatic" || value === 4 || value === "4" || value === ":") return "aromatic";
   if (value === 3 || value === "3" || value === "#") return 3;
   if (value === 2 || value === "2" || value === "=") return 2;
-  return 1;
+  if (value === 1 || value === "1" || value === "-" || value === "single") return 1;
+  throw new Error(`Invalid bond order "${String(value)}" on ${context}. Use 1, 2, 3, or "aromatic" (4).`);
 }
 
 function sanitizeId(value: string, fallback: string) {

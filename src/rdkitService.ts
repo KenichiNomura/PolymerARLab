@@ -74,14 +74,15 @@ export async function normalizeStructureWithRDKit(
     const hadCoords = mol.has_coords();
     const molblock = molfileWithCoordinates(mol, hadCoords);
     const canonicalSmiles = safeCall(() => mol?.get_smiles() ?? "");
+    const label = inputLabel(source, format);
     const messages = [
-      `RDKit.js ${module.version()} accepted ${inputLabel(source, format)}.`,
+      `RDKit.js ${module.version()} accepted ${label}.`,
       hadCoords ? "Used supplied 2D coordinates." : "Generated 2D coordinates in the browser.",
     ];
     if (canonicalSmiles) messages.push(`Canonical SMILES: ${canonicalSmiles}.`);
 
     return {
-      input: molblock,
+      input: label === "SMILES" ? withMolblockName(molblock, source) : molblock,
       format: "molfile",
       messages,
     };
@@ -141,11 +142,26 @@ function loadRDKitScript(): Promise<void> {
 function molfileWithCoordinates(mol: JSMol, hadCoords: boolean) {
   if (hadCoords) return requireMolblock(mol.get_molblock());
 
-  const generated = safeCall(() => mol.get_new_coords(true));
-  if (generated) return requireMolblock(generated);
+  // Do not trim the result: the V2000 header starts with a blank name line,
+  // and trimming it away breaks downstream Molfile header parsing.
+  let generated = "";
+  try {
+    generated = mol.get_new_coords(true);
+  } catch {
+    generated = "";
+  }
+  if (generated.trim()) return requireMolblock(generated);
 
   mol.set_new_coords(true);
   return requireMolblock(mol.get_molblock());
+}
+
+// The V2000 title line (line 1) is blank in RDKit output; carrying the typed
+// SMILES there gives the imported structure a readable display name.
+function withMolblockName(molblock: string, name: string) {
+  const lines = molblock.split("\n");
+  lines[0] = name.slice(0, 80);
+  return lines.join("\n");
 }
 
 function requireMolblock(value: string) {

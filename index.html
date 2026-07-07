@@ -247,7 +247,7 @@
 
       .button-row {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
       .button-row button {
@@ -611,8 +611,10 @@
           <div class="button-row">
             <button id="cameraModeBtn" type="button">Camera AR</button>
             <button id="captureBtn" type="button" disabled>Capture</button>
+            <button id="uploadSketchBtn" type="button">Upload sketch</button>
             <button id="resetViewBtn" type="button">Reset view</button>
           </div>
+          <input id="sketchFileInput" type="file" accept="image/*" hidden />
 
           <div class="toggle">
             <input id="labelsToggle" type="checkbox" />

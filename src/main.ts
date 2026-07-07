@@ -15,6 +15,8 @@ import {
   type TemplateAtom,
 } from "./polymerData";
 import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./rdkitService";
+import type { RecognitionSource } from "./scannerContract";
+import { recognizeSketch, recognizedStructureToImportJson } from "./scannerPipeline";
 import { IMPORTED_TEMPLATE_ID, importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
@@ -62,6 +64,8 @@ const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
 const cameraModeBtn = document.getElementById("cameraModeBtn") as HTMLButtonElement;
 const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
+const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
+const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
 const scanCanvas = document.getElementById("scanCanvas") as HTMLCanvasElement;
 const scanPreview = document.getElementById("scanPreview")!;
@@ -288,6 +292,10 @@ cameraModeBtn.addEventListener("click", () => {
 });
 
 captureBtn.addEventListener("click", captureSketchFrame);
+uploadSketchBtn.addEventListener("click", () => sketchFileInput.click());
+sketchFileInput.addEventListener("change", () => {
+  void loadSketchImageFile();
+});
 resetViewBtn.addEventListener("click", resetView);
 
 window.addEventListener("resize", () => {
@@ -374,8 +382,9 @@ async function loadImportedStructure() {
     polymerSelect.value = IMPORTED_TEMPLATE_ID;
     repeatRange.value = String(importedTemplate.defaultRepeats);
     rebuildGraph();
-    const importedMessage = `${result.messages[0]} ${importedTemplate.atoms.length} atoms, ${importedTemplate.bonds.length} bonds.`;
-    setImportStatus([...normalized.messages, importedMessage].join(" "));
+    const [importedMessage, ...importWarnings] = result.messages;
+    const countsMessage = `${importedMessage} ${importedTemplate.atoms.length} atoms, ${importedTemplate.bonds.length} bonds.`;
+    setImportStatus([...normalized.messages, countsMessage, ...importWarnings].join(" "));
     setStatus(`Verification target: imported ${result.detectedFormat.toUpperCase()} structure.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -787,9 +796,50 @@ function captureSketchFrame() {
   scanCanvas.width = videoEl.videoWidth;
   scanCanvas.height = videoEl.videoHeight;
   context.drawImage(videoEl, 0, 0, scanCanvas.width, scanCanvas.height);
+  updateScanPreview();
+  void runSketchRecognition("camera-capture");
+}
+
+async function loadSketchImageFile() {
+  const file = sketchFileInput.files?.[0];
+  sketchFileInput.value = "";
+  if (!file) return;
+
+  try {
+    const image = await createImageBitmap(file);
+    scanCanvas.width = image.width;
+    scanCanvas.height = image.height;
+    scanCanvas.getContext("2d")!.drawImage(image, 0, 0);
+    image.close();
+  } catch (error) {
+    setStatus(`Could not read that image file: ${error instanceof Error ? error.message : String(error)}`, true);
+    return;
+  }
+
+  updateScanPreview();
+  await runSketchRecognition("image-upload");
+}
+
+function updateScanPreview() {
   scanPreview.style.backgroundImage = `url(${scanCanvas.toDataURL("image/jpeg", 0.82)})`;
   scanPreview.classList.add("has-capture");
-  setStatus(`Captured frame. Current verification target: ${currentTemplate.shortName}.`);
+}
+
+async function runSketchRecognition(source: RecognitionSource) {
+  setStatus("Recognizing sketch...");
+  try {
+    const recognized = await recognizeSketch(scanCanvas, source);
+    polymerModeToggle.checked = recognized.polymer?.isRepeatUnit ?? false;
+    updateStructureModeUi();
+    structureFormat.value = "json";
+    structureInput.value = recognizedStructureToImportJson(recognized);
+    await loadImportedStructure();
+    const confidence = `Recognition confidence ${(recognized.confidence * 100).toFixed(0)}%.`;
+    setStatus([confidence, ...recognized.warnings].join(" "), recognized.warnings.length > 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`Sketch recognition failed: ${message}`, true);
+  }
 }
 
 function updatePlatformStatus() {
