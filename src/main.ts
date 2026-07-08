@@ -54,6 +54,7 @@ const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
 const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
+const clearBtn = document.getElementById("clearBtn") as HTMLButtonElement;
 const arQuickLookBtn = document.getElementById("arQuickLookBtn") as HTMLButtonElement;
 const scanCanvas = document.getElementById("scanCanvas") as HTMLCanvasElement;
 const scanPreview = document.getElementById("scanPreview")!;
@@ -146,6 +147,22 @@ function rebuildGraph() {
   updateThreeGraph();
   renderFallbackGraph(fallbackEl, currentGraph, currentTemplate.name, Boolean(three));
   updateAttachmentControls();
+}
+
+// Empties the display. Any later structure action (choose example, scan,
+// import, mode/repeat change) rebuilds a molecule, so Clear hides what is
+// shown rather than permanently disabling the app.
+function clearMolecule() {
+  currentGraph = null;
+  if (three) three.moleculeRoot.visible = false;
+  fallbackEl.innerHTML = "";
+  structureSummary.textContent = "No structure loaded.";
+  validationStatus.textContent = "";
+  exampleStructureSelect.value = "";
+  scanPreview.classList.remove("has-capture");
+  scanPreview.style.backgroundImage = "";
+  quickLook.scheduleRefresh();
+  showStatus("Cleared the current structure.");
 }
 
 function updateThreeGraph() {
@@ -462,6 +479,7 @@ sketchFileInput.addEventListener("change", () => {
 resetViewBtn.addEventListener("click", () => {
   if (three) resetView(three);
 });
+clearBtn.addEventListener("click", clearMolecule);
 arQuickLookBtn.addEventListener("click", () => {
   // An active camera stream holds the camera hardware that iOS AR Quick Look
   // needs, so stop the overlay first and let the next tap launch AR with the

@@ -250,9 +250,14 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .button-row button {
+      .button-row button,
+      .button-row select {
         min-width: 0;
         padding: 0 8px;
+      }
+
+      .button-row .span-full {
+        grid-column: 1 / -1;
       }
 
       .summary {
@@ -513,19 +518,10 @@
           padding: 10px;
         }
 
-        .button-row {
-          grid-template-columns: 1fr;
-        }
-
         .import-grid,
         .import-actions,
-        .example-grid,
         .attachment-grid {
           grid-template-columns: 1fr;
-        }
-
-        .button-row button:last-child {
-          grid-column: auto;
         }
 
         .summary,
@@ -562,9 +558,6 @@
             <input id="polymerModeToggle" type="checkbox" />
           </div>
 
-          <div class="example-grid">
-            <select id="exampleStructureSelect" aria-label="Example structures"></select>
-          </div>
           <select id="polymerSelect" hidden aria-hidden="true"></select>
 
           <div class="field polymer-only">
@@ -611,9 +604,11 @@
           <div class="button-row">
             <button id="cameraModeBtn" type="button">Camera AR</button>
             <button id="captureBtn" type="button" disabled>Capture</button>
-            <button id="uploadSketchBtn" type="button">Upload sketch</button>
             <button id="resetViewBtn" type="button">Reset view</button>
-            <button id="arQuickLookBtn" type="button">AR Quick Look</button>
+            <button id="clearBtn" type="button">Clear</button>
+            <button id="uploadSketchBtn" type="button">Upload sketch</button>
+            <select id="exampleStructureSelect" aria-label="Example structures"></select>
+            <button id="arQuickLookBtn" class="span-full" type="button">AR Quick Look</button>
           </div>
           <input id="sketchFileInput" type="file" accept="image/*" hidden />
 
