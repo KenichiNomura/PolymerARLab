@@ -48,13 +48,33 @@ export function isIOSDevice(): boolean {
 // Look, and the click must run synchronously inside a fresh user tap —
 // otherwise iOS opens the blob as a blank page instead of launching AR.
 // Callers therefore build the blob first and invoke this from a later tap.
-export function openUSDZUrl(url: string, fileName: string) {
-  const anchor = document.createElement("a");
-  anchor.rel = "ar";
+//
+// Repeat launches have two further Safari quirks: an anchor that is created
+// and removed per click only works once, and a blob URL that Quick Look has
+// already consumed may not reopen. So one persistent anchor lives in the DOM
+// and every open mints a fresh object URL.
+let arAnchor: HTMLAnchorElement | null = null;
+let lastObjectUrl: string | null = null;
+
+function persistentAnchor(): HTMLAnchorElement {
+  if (!arAnchor || !arAnchor.isConnected) {
+    arAnchor = document.createElement("a");
+    arAnchor.rel = "ar";
+    arAnchor.style.display = "none";
+    arAnchor.appendChild(document.createElement("img"));
+    document.body.appendChild(arAnchor);
+  }
+  return arAnchor;
+}
+
+export function openUSDZBlob(blob: Blob, fileName: string) {
+  if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+  const url = URL.createObjectURL(blob);
+  lastObjectUrl = url;
+
+  const anchor = persistentAnchor();
   anchor.href = url;
-  if (!isIOSDevice()) anchor.download = fileName;
-  anchor.appendChild(document.createElement("img"));
-  document.body.appendChild(anchor);
+  if (isIOSDevice()) anchor.removeAttribute("download");
+  else anchor.download = fileName;
   anchor.click();
-  anchor.remove();
 }
