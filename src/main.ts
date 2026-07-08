@@ -515,7 +515,7 @@ function rebuildGraph() {
   const repeatCount = isPolymerMode() ? Number(repeatRange.value) : 1;
   repeatValue.textContent = String(repeatCount);
   currentGraph = generatePolymerGraph(currentTemplate, repeatCount);
-  clearPreparedAR();
+  scheduleARPrepare();
   updateSummary();
   updateThreeGraph();
   renderFallbackGraph();
@@ -892,15 +892,51 @@ async function runSketchRecognition(source: RecognitionSource) {
   }
 }
 
-// Safari launches Quick Look only from a synchronous click, so the model is
-// built on the first tap and opened on the second; any structure change
-// invalidates the prepared file. The blob is cached (not a URL) because each
-// open mints a fresh object URL - Safari may refuse to reopen a consumed one.
+// Quick Look requires the rel="ar" click to stay inside a fresh user tap,
+// so the USDZ is prepared in the background whenever the structure settles:
+// the common case is a single tap that opens synchronously. If a tap lands
+// before the model is ready, it builds on demand and iOS asks for one more
+// tap (desktop can open asynchronously since it only downloads).
 let preparedAR: { blob: Blob; fileName: string; graph: MolecularGraph } | null = null;
+let arPreparePromise: Promise<void> | null = null;
+let arPrepareTimer: number | undefined;
 
-function clearPreparedAR() {
+function scheduleARPrepare() {
   preparedAR = null;
   arQuickLookBtn.textContent = "AR Quick Look";
+  window.clearTimeout(arPrepareTimer);
+  arPrepareTimer = window.setTimeout(() => void prepareAR(), 400);
+}
+
+function arFileName(graph: MolecularGraph): string {
+  const baseName = (isPolymerMode() ? `${currentTemplate.shortName}-n${graph.repeatCount}` : currentTemplate.name)
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${baseName || "molecule"}.usdz`;
+}
+
+function prepareAR(): Promise<void> {
+  if (arPreparePromise) return arPreparePromise;
+  if (!three || !currentGraph) return Promise.resolve();
+  const runtime = three;
+  const graph = currentGraph;
+
+  arPreparePromise = buildMoleculeUSDZ(runtime.moleculeRenderer.group)
+    .then((blob) => {
+      if (graph === currentGraph) {
+        preparedAR = { blob, fileName: arFileName(graph), graph };
+        arQuickLookBtn.textContent = "Open AR view";
+      }
+    })
+    .catch((error) => {
+      console.warn("Background USDZ prepare failed; the button will retry on tap.", error);
+    })
+    .finally(() => {
+      arPreparePromise = null;
+      // The structure changed while this build ran; prepare the new one.
+      if (currentGraph && currentGraph !== graph) void prepareAR();
+    });
+  return arPreparePromise;
 }
 
 async function exportQuickLook() {
@@ -909,7 +945,7 @@ async function exportQuickLook() {
     return;
   }
 
-  if (preparedAR && preparedAR.graph === currentGraph) {
+  if (preparedAR?.graph === currentGraph) {
     openUSDZBlob(preparedAR.blob, preparedAR.fileName);
     setStatus(
       isIOSDevice()
@@ -922,24 +958,20 @@ async function exportQuickLook() {
   arQuickLookBtn.disabled = true;
   setStatus("Building USDZ model...");
   try {
-    const blob = await buildMoleculeUSDZ(three.moleculeRenderer.group);
-    const baseName = (isPolymerMode() ? `${currentTemplate.shortName}-n${currentGraph.repeatCount}` : currentTemplate.name)
-      .replace(/[^A-Za-z0-9_-]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "molecule";
-    preparedAR = { blob, fileName: `${baseName}.usdz`, graph: currentGraph };
-
+    await prepareAR();
+    if (preparedAR?.graph !== currentGraph) {
+      setStatus("USDZ export failed - try the AR button again.", true);
+      return;
+    }
     if (isIOSDevice()) {
-      // Opening now would fall outside the tap's user activation and show a
-      // blank page instead of Quick Look; ask for a second tap.
-      arQuickLookBtn.textContent = "Open AR view";
+      // Opening now would fall outside this tap's user activation and show
+      // a blank page instead of Quick Look; the button now reads "Open AR
+      // view" and the next tap opens instantly.
       setStatus("AR model ready - tap 'Open AR view' to place it on a surface.");
     } else {
       openUSDZBlob(preparedAR.blob, preparedAR.fileName);
       setStatus("USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.");
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    setStatus(`USDZ export failed: ${message}`, true);
   } finally {
     arQuickLookBtn.disabled = false;
   }
@@ -952,12 +984,13 @@ function updatePlatformStatus() {
   const webgl = three ? "WebGL ready" : "2D fallback";
   const secure = window.isSecureContext ? "trusted HTTPS" : "not trusted HTTPS";
 
+  const build = `Build ${__BUILD_TIME__}.`;
   if (isIos) {
-    setStatus(`iPhone Safari path: ${webgl}, camera ${hasCamera ? "available" : "unavailable"}, ${secure}.`);
+    setStatus(`iPhone Safari path: ${webgl}, camera ${hasCamera ? "available" : "unavailable"}, ${secure}. ${build}`);
   } else if (hasWebXr) {
-    setStatus(`Android/compatible path: ${webgl}, WebXR available, ${secure}.`);
+    setStatus(`Android/compatible path: ${webgl}, WebXR available, ${secure}. ${build}`);
   } else {
-    setStatus(`Preview path: ${webgl}, WebXR unavailable, ${secure}.`);
+    setStatus(`Preview path: ${webgl}, WebXR unavailable, ${secure}. ${build}`);
   }
 }
 
