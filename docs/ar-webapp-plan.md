@@ -40,6 +40,8 @@ Completed:
 - Hardened the on-device recognizer against real handwriting: adaptive thresholding, stroke-thickness-normalized glyph matching, multi-stroke letter grouping, H/N connector disambiguation, direction-aware bond attachment (July 7, 2026; validated on real CO2 and H2O pen photos).
 - Added AI recognition: sketch photo -> Cloudflare Worker (`worker/`) -> Claude vision -> SMILES with structured output, falling back to the on-device recognizer offline; chemically invalid as-drawn structures import permissively so the valence checker can flag them (July 7, 2026).
 - Replaced heuristic VSEPR layouts with real 3D conformers via openchemlib's ConformerGenerator for all structures (bent water, tetrahedral carbons, planar rings, chain-axis-aligned polymer repeat units), with VSEPR as fallback (July 7, 2026).
+- Added USDZ/AR Quick Look export for native iPhone AR placement; after two Safari-quirk regressions (user-activation timing, hidden-anchor refusal) the final design pre-builds the USDZ in the background and launches through one detached reusable rel="ar" anchor with a fresh blob URL per open (July 7, 2026).
+- Stabilization pass: split the main.ts monolith into focused modules (ui/status, ui/examples, scene/threeScene, scene/webxr, scene/quickLook, cameraOverlay, recognitionFlow, fallback2d, platform), gave each status area a single owner, cached conformer generation per template so repeat-slider drags are instant, and stamped the build time into the platform status line (July 7, 2026).
 
 ## Recommended Architecture
 

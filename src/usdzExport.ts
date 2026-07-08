@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { USDZExporter } from "three/examples/jsm/exporters/USDZExporter.js";
+import { isIOSDevice } from "./platform";
 
 // Export the current molecule as a USDZ file for Apple AR Quick Look —
 // iPhone Safari has no WebXR, so this is the native-AR path on iOS: the
@@ -38,10 +39,6 @@ export async function buildMoleculeUSDZ(source: THREE.Object3D): Promise<Blob> {
   const exporter = new USDZExporter();
   const data = await exporter.parseAsync(scene, { quickLookCompatible: true });
   return new Blob([data], { type: "model/vnd.usdz+zip" });
-}
-
-export function isIOSDevice(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 // Safari requires an <img> child inside a rel="ar" anchor to trigger Quick

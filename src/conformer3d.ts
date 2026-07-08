@@ -15,6 +15,10 @@ const REPEAT_LINK_BOND = 1.53;
 let resourcesReady = false;
 let resourcesPromise: Promise<void> | null = null;
 
+export function conformerResourcesReady(): boolean {
+  return resourcesReady;
+}
+
 export function preloadConformerResources(): Promise<void> {
   if (!resourcesPromise) {
     const url = new URL("vendor/openchemlib/resources.json", document.baseURI ?? window.location.href).toString();
