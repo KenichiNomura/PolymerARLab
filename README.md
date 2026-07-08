@@ -15,6 +15,7 @@ The app is being shaped for high-school to undergraduate chemistry use:
 - visualize explicit single, double, triple, and aromatic bonds;
 - expand simple polymer repeat units into short visible chains;
 - preview in desktop 3D, Android WebXR AR, or an iPhone camera overlay;
+- place structures in native iOS AR via USDZ/Quick Look export ("AR Quick Look" button);
 - prepare for handwritten Lewis-structure recognition.
 
 ## Local Development

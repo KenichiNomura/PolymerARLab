@@ -20,6 +20,7 @@ import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./r
 import type { RecognitionSource } from "./scannerContract";
 import { recognizeSketch, recognizedStructureToImportJson } from "./scannerPipeline";
 import { IMPORTED_TEMPLATE_ID, importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
+import { isIOSDevice, moleculeGroupToUSDZ, openUSDZ } from "./usdzExport";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
 interface ThreeRuntime {
@@ -70,6 +71,7 @@ const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
 const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
+const arQuickLookBtn = document.getElementById("arQuickLookBtn") as HTMLButtonElement;
 const scanCanvas = document.getElementById("scanCanvas") as HTMLCanvasElement;
 const scanPreview = document.getElementById("scanPreview")!;
 const scanStatus = document.getElementById("scanStatus")!;
@@ -305,6 +307,9 @@ sketchFileInput.addEventListener("change", () => {
   void loadSketchImageFile();
 });
 resetViewBtn.addEventListener("click", resetView);
+arQuickLookBtn.addEventListener("click", () => {
+  void exportQuickLook();
+});
 
 window.addEventListener("resize", () => {
   if (!three) return;
@@ -883,6 +888,32 @@ async function runSketchRecognition(source: RecognitionSource) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Sketch recognition failed: ${message}`, true);
+  }
+}
+
+async function exportQuickLook() {
+  if (!three || !currentGraph) {
+    setStatus("The 3D scene is not available for AR export in this browser.", true);
+    return;
+  }
+  arQuickLookBtn.disabled = true;
+  setStatus("Building USDZ model...");
+  try {
+    const blob = await moleculeGroupToUSDZ(three.moleculeRenderer.group);
+    const baseName = (isPolymerMode() ? `${currentTemplate.shortName}-n${currentGraph.repeatCount}` : currentTemplate.name)
+      .replace(/[^A-Za-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "molecule";
+    openUSDZ(blob, `${baseName}.usdz`);
+    setStatus(
+      isIOSDevice()
+        ? "Opening AR Quick Look - point at a surface to place the structure."
+        : "USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.",
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`USDZ export failed: ${message}`, true);
+  } finally {
+    arQuickLookBtn.disabled = false;
   }
 }
 
