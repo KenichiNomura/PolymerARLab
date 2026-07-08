@@ -8,7 +8,7 @@ import { USDZExporter } from "three/examples/jsm/exporters/USDZExporter.js";
 // USDZ units are meters; scale the molecule to sit desk-sized on the floor.
 const TARGET_SIZE_METERS = 0.3;
 
-export async function moleculeGroupToUSDZ(source: THREE.Object3D): Promise<Blob> {
+export async function buildMoleculeUSDZ(source: THREE.Object3D): Promise<Blob> {
   const clone = source.clone(true);
 
   // Labels are sprites, which USDZ cannot represent; drop them explicitly.
@@ -45,9 +45,10 @@ export function isIOSDevice(): boolean {
 }
 
 // Safari requires an <img> child inside a rel="ar" anchor to trigger Quick
-// Look; on other platforms the same anchor downloads the .usdz file.
-export function openUSDZ(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
+// Look, and the click must run synchronously inside a fresh user tap —
+// otherwise iOS opens the blob as a blank page instead of launching AR.
+// Callers therefore build the blob first and invoke this from a later tap.
+export function openUSDZUrl(url: string, fileName: string) {
   const anchor = document.createElement("a");
   anchor.rel = "ar";
   anchor.href = url;
@@ -55,9 +56,5 @@ export function openUSDZ(blob: Blob, fileName: string) {
   anchor.appendChild(document.createElement("img"));
   document.body.appendChild(anchor);
   anchor.click();
-  // Quick Look loads the URL asynchronously; keep it alive briefly.
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    anchor.remove();
-  }, 60_000);
+  anchor.remove();
 }

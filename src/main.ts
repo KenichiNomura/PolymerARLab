@@ -20,7 +20,7 @@ import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./r
 import type { RecognitionSource } from "./scannerContract";
 import { recognizeSketch, recognizedStructureToImportJson } from "./scannerPipeline";
 import { IMPORTED_TEMPLATE_ID, importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
-import { isIOSDevice, moleculeGroupToUSDZ, openUSDZ } from "./usdzExport";
+import { buildMoleculeUSDZ, isIOSDevice, openUSDZUrl } from "./usdzExport";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
 interface ThreeRuntime {
@@ -515,6 +515,7 @@ function rebuildGraph() {
   const repeatCount = isPolymerMode() ? Number(repeatRange.value) : 1;
   repeatValue.textContent = String(repeatCount);
   currentGraph = generatePolymerGraph(currentTemplate, repeatCount);
+  clearPreparedAR();
   updateSummary();
   updateThreeGraph();
   renderFallbackGraph();
@@ -891,24 +892,54 @@ async function runSketchRecognition(source: RecognitionSource) {
   }
 }
 
+// Safari launches Quick Look only from a synchronous click, so the model is
+// built on the first tap and opened on the second; any structure change
+// invalidates the prepared file.
+let preparedAR: { url: string; fileName: string; graph: MolecularGraph } | null = null;
+
+function clearPreparedAR() {
+  if (preparedAR) {
+    URL.revokeObjectURL(preparedAR.url);
+    preparedAR = null;
+  }
+  arQuickLookBtn.textContent = "AR Quick Look";
+}
+
 async function exportQuickLook() {
   if (!three || !currentGraph) {
     setStatus("The 3D scene is not available for AR export in this browser.", true);
     return;
   }
+
+  if (preparedAR && preparedAR.graph === currentGraph) {
+    openUSDZUrl(preparedAR.url, preparedAR.fileName);
+    setStatus(
+      isIOSDevice()
+        ? "Opening AR Quick Look - move the phone to find a surface, then tap to place."
+        : "USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.",
+    );
+    return;
+  }
+
   arQuickLookBtn.disabled = true;
   setStatus("Building USDZ model...");
   try {
-    const blob = await moleculeGroupToUSDZ(three.moleculeRenderer.group);
+    const blob = await buildMoleculeUSDZ(three.moleculeRenderer.group);
     const baseName = (isPolymerMode() ? `${currentTemplate.shortName}-n${currentGraph.repeatCount}` : currentTemplate.name)
       .replace(/[^A-Za-z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "") || "molecule";
-    openUSDZ(blob, `${baseName}.usdz`);
-    setStatus(
-      isIOSDevice()
-        ? "Opening AR Quick Look - point at a surface to place the structure."
-        : "USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.",
-    );
+    clearPreparedAR();
+    preparedAR = { url: URL.createObjectURL(blob), fileName: `${baseName}.usdz`, graph: currentGraph };
+
+    if (isIOSDevice()) {
+      // Opening now would fall outside the tap's user activation and show a
+      // blank page instead of Quick Look; ask for a second tap.
+      arQuickLookBtn.textContent = "Open AR view";
+      setStatus("AR model ready - tap 'Open AR view' to place it on a surface.");
+    } else {
+      openUSDZUrl(preparedAR.url, preparedAR.fileName);
+      setStatus("USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.");
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`USDZ export failed: ${message}`, true);
