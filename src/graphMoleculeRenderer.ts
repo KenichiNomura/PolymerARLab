@@ -4,7 +4,13 @@ import type { BondOrder, GraphAtom, GraphBond, MolecularGraph } from "./polymerD
 
 const ATOM_SCALE = 0.38;
 const BOND_RADIUS = 0.055;
-const MULTI_BOND_SPACING = 0.105;
+// Double/triple rods are drawn slightly thinner and spaced center-to-center
+// wider than two radii, leaving a clear ~0.03 gap so the parallel rods read
+// as distinct rather than merging into one fat bond.
+const MULTI_BOND_RADIUS = 0.046;
+const MULTI_BOND_SPACING = 0.125;
+// Offset of the aromatic accent rod (kept independent of the spacing above).
+const AROMATIC_INNER_OFFSET = 0.086;
 const HIGHLIGHT_COLOR = 0xffd166;
 const HIGHLIGHT_EMISSIVE = 0x2b2108;
 
@@ -226,7 +232,7 @@ export class GraphMoleculeRenderer {
     normal.normalize();
 
     const offsets = getBondOffsets(graphBond.order);
-    const radius = graphBond.order === "aromatic" ? BOND_RADIUS * 0.88 : BOND_RADIUS;
+    const radius = bondRodRadius(graphBond.order);
     for (const offset of offsets) {
       const offsetVec = normal.clone().multiplyScalar(offset);
       this.addBondCylinder(start.clone().add(offsetVec), end.clone().add(offsetVec), radius, material, graphBond);
@@ -234,7 +240,7 @@ export class GraphMoleculeRenderer {
 
     if (graphBond.order === "aromatic") {
       const innerMaterial = this.bondMaterial("aromatic", highlighted, true);
-      const offsetVec = normal.clone().multiplyScalar(MULTI_BOND_SPACING * 0.82);
+      const offsetVec = normal.clone().multiplyScalar(AROMATIC_INNER_OFFSET);
       this.addBondCylinder(start.clone().add(offsetVec), end.clone().add(offsetVec), BOND_RADIUS * 0.42, innerMaterial, graphBond);
     }
   }
@@ -271,4 +277,10 @@ function getBondOffsets(order: BondOrder): number[] {
   if (order === 2) return [-MULTI_BOND_SPACING * 0.5, MULTI_BOND_SPACING * 0.5];
   if (order === 3) return [-MULTI_BOND_SPACING, 0, MULTI_BOND_SPACING];
   return [0];
+}
+
+function bondRodRadius(order: BondOrder): number {
+  if (order === "aromatic") return BOND_RADIUS * 0.88;
+  if (order === 2 || order === 3) return MULTI_BOND_RADIUS;
+  return BOND_RADIUS;
 }
