@@ -551,6 +551,32 @@
 
     <main class="control-panel" aria-label="Structure controls">
       <details class="control-section" open>
+        <summary>View and AR</summary>
+        <div class="section-body">
+          <div class="button-row">
+            <button id="cameraModeBtn" type="button">Camera AR</button>
+            <button id="captureBtn" type="button" disabled>Capture</button>
+            <button id="resetViewBtn" type="button">Reset view</button>
+            <button id="clearBtn" type="button">Clear</button>
+            <button id="uploadSketchBtn" type="button">Upload sketch</button>
+            <select id="exampleStructureSelect" aria-label="Example structures"></select>
+            <button id="arQuickLookBtn" class="span-full" type="button">AR Quick Look</button>
+          </div>
+          <input id="sketchFileInput" type="file" accept="image/*" hidden />
+
+          <div class="toggle">
+            <input id="labelsToggle" type="checkbox" />
+            <label for="labelsToggle">Atom labels</label>
+          </div>
+
+          <div class="toggle">
+            <input id="hydrogensToggle" type="checkbox" checked />
+            <label for="hydrogensToggle">Show hydrogens</label>
+          </div>
+        </div>
+      </details>
+
+      <details class="control-section">
         <summary>Structure</summary>
         <div class="section-body">
           <div class="toggle mode-toggle">
@@ -599,32 +625,6 @@
       </details>
 
       <details class="control-section">
-        <summary>View and AR</summary>
-        <div class="section-body">
-          <div class="button-row">
-            <button id="cameraModeBtn" type="button">Camera AR</button>
-            <button id="captureBtn" type="button" disabled>Capture</button>
-            <button id="resetViewBtn" type="button">Reset view</button>
-            <button id="clearBtn" type="button">Clear</button>
-            <button id="uploadSketchBtn" type="button">Upload sketch</button>
-            <select id="exampleStructureSelect" aria-label="Example structures"></select>
-            <button id="arQuickLookBtn" class="span-full" type="button">AR Quick Look</button>
-          </div>
-          <input id="sketchFileInput" type="file" accept="image/*" hidden />
-
-          <div class="toggle">
-            <input id="labelsToggle" type="checkbox" />
-            <label for="labelsToggle">Atom labels</label>
-          </div>
-
-          <div class="toggle">
-            <input id="hydrogensToggle" type="checkbox" checked />
-            <label for="hydrogensToggle">Show hydrogens</label>
-          </div>
-        </div>
-      </details>
-
-      <details class="control-section" open>
         <summary>Status</summary>
         <div class="section-body">
           <div id="structureSummary" class="summary"></div>
