@@ -7,6 +7,7 @@
 // The deployed worker/ instance (see README "AI Recognition Setup").
 const DEFAULT_AI_ENDPOINT = "https://polymer-ar-lab-recognizer.kenichi-nomura.workers.dev";
 const ENDPOINT_STORAGE_KEY = "polymerARLab.aiEndpoint";
+const TOKEN_STORAGE_KEY = "polymerARLab.aiToken";
 const MAX_UPLOAD_DIMENSION = 1024;
 const REQUEST_TIMEOUT_MS = 45_000;
 
@@ -38,15 +39,34 @@ export function aiRecognitionEndpoint(): string {
   }
 }
 
+// The Worker requires a shared passphrase so strangers cannot spend the
+// deployer's API credits. Devices receive it once via ?aitoken=<passphrase>
+// (persisted); ?aitoken=off forgets it. AI recognition only runs when both
+// the endpoint and a token are configured.
+export function aiAccessToken(): string {
+  try {
+    const fromQuery = new URLSearchParams(window.location.search).get("aitoken");
+    if (fromQuery === "off") {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } else if (fromQuery) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, fromQuery);
+    }
+    return localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export async function recognizeSketchWithAI(canvas: HTMLCanvasElement, endpoint: string): Promise<AIRecognitionResult> {
   const image = canvasToJpegBase64(canvas);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
+    const token = aiAccessToken();
     const response = await fetch(new URL("/recognize", endpoint), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { "X-AI-Token": token } : {}) },
       body: JSON.stringify({ image, mediaType: "image/jpeg" }),
       signal: controller.signal,
     });

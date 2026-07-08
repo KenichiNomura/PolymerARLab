@@ -8,6 +8,8 @@ import Anthropic from "@anthropic-ai/sdk";
 interface Env {
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_AUTH_TOKEN?: string;
+  /** Shared access passphrase; requests must send it as X-AI-Token. */
+  AI_ACCESS_TOKEN?: string;
   MODEL?: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -72,6 +74,11 @@ export default {
     }
     if (!cors["Access-Control-Allow-Origin"]) {
       return json({ error: "Origin not allowed." }, 403, cors);
+    }
+    // Origin headers are forgeable outside browsers, so the real gate is the
+    // shared token: without it, no Claude call is made and nothing is billed.
+    if (env.AI_ACCESS_TOKEN && request.headers.get("X-AI-Token") !== env.AI_ACCESS_TOKEN) {
+      return json({ error: "Invalid or missing access token. Open the site once with ?aitoken=<passphrase>." }, 401, cors);
     }
 
     let body: RecognizeRequest;
@@ -159,7 +166,7 @@ function corsHeaders(origin: string, env: Env): Record<string, string> {
     .filter(Boolean);
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-AI-Token",
     "Access-Control-Max-Age": "86400",
   };
   if (allowed.includes(origin)) {

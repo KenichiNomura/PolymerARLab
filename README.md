@@ -123,11 +123,21 @@ npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler deploy                    # prints your workers.dev URL
 ```
 
-Then point the app at the Worker either by setting `DEFAULT_AI_ENDPOINT` in
-`src/aiRecognition.ts` (and redeploying the site) or per-device by opening
-`https://<your-site>/?ai=https://<your-worker>.workers.dev` once (persisted in
-localStorage; `?ai=off` disables AI recognition on that device and
-`?ai=default` restores the built-in endpoint). The Worker's `ALLOWED_ORIGINS` var in
+Set a shared access passphrase so strangers cannot spend your API credits
+(origin checks alone are forgeable outside browsers):
+
+```bash
+npx wrangler secret put AI_ACCESS_TOKEN   # pick any passphrase; rotate anytime
+```
+
+Then enable AI scanning per device by opening
+`https://<your-site>/?aitoken=<passphrase>` once (persisted in localStorage;
+`?aitoken=off` forgets it). Devices without the token automatically use the
+free on-device recognizer, and tokenless requests are rejected before any
+billable API call. The endpoint itself defaults to `DEFAULT_AI_ENDPOINT` in
+`src/aiRecognition.ts` and can be overridden with `?ai=<url>` (`?ai=off`
+disables, `?ai=default` restores). To rotate the passphrase, rerun the
+`secret put` command and share the new `?aitoken=` link. The Worker's `ALLOWED_ORIGINS` var in
 `worker/wrangler.toml` must list your site origin. Model defaults to
 `claude-opus-4-8`; set the `MODEL` var to `claude-haiku-4-5` for ~5x cheaper
 scans. Note the endpoint is callable by anyone who can reach it — fine for

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { aiRecognitionEndpoint, recognizeSketchWithAI } from "./aiRecognition";
+import { aiAccessToken, aiRecognitionEndpoint, recognizeSketchWithAI } from "./aiRecognition";
 import { preloadConformerResources, templateTo3D } from "./conformer3d";
 import { getElementInfo } from "./elements";
 import { GraphMoleculeRenderer } from "./graphMoleculeRenderer";
@@ -847,8 +847,10 @@ function updateScanPreview() {
 }
 
 async function runSketchRecognition(source: RecognitionSource) {
+  // AI recognition needs both the endpoint and the shared access token, so
+  // unconfigured devices go straight to the free on-device recognizer.
   const endpoint = aiRecognitionEndpoint();
-  if (endpoint) {
+  if (endpoint && aiAccessToken()) {
     setStatus("AI recognition (Claude) in progress...");
     try {
       const ai = await recognizeSketchWithAI(scanCanvas, endpoint);
@@ -979,8 +981,9 @@ function drawFallbackBond(
   return `${lines}<line x1="${(start.x + nx * 1.1).toFixed(1)}" y1="${(start.y + ny * 1.1).toFixed(1)}" x2="${(end.x + nx * 1.1).toFixed(1)}" y2="${(end.y + ny * 1.1).toFixed(1)}" stroke="${color}" stroke-width="1.8" stroke-linecap="round" opacity="0.8"/>`;
 }
 
-// Persist any ?ai=<url>/off/default endpoint choice from the URL on load.
+// Persist any ?ai=<url>/off/default endpoint and ?aitoken= choices on load.
 aiRecognitionEndpoint();
+aiAccessToken();
 
 updateStructureModeUi();
 rebuildGraph();
