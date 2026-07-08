@@ -463,6 +463,14 @@ resetViewBtn.addEventListener("click", () => {
   if (three) resetView(three);
 });
 arQuickLookBtn.addEventListener("click", () => {
+  // An active camera stream holds the camera hardware that iOS AR Quick Look
+  // needs, so stop the overlay first and let the next tap launch AR with the
+  // camera fully released (same reason WebXR stops it on session start).
+  if (cameraOverlay.isActive()) {
+    cameraOverlay.stop();
+    showStatus("Camera stopped - tap Open AR view again to place it in AR.");
+    return;
+  }
   void quickLook.handleTap();
 });
 

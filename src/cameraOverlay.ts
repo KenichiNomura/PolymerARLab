@@ -70,7 +70,7 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
     return true;
   }
 
-  return { toggle, stop, drawFrameTo };
+  return { toggle, stop, drawFrameTo, isActive: () => stream !== null };
 }
 
 async function requestCameraStream(): Promise<MediaStream> {
