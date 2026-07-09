@@ -334,7 +334,11 @@ export function elementLabels(atoms: Array<{ id: string; element: AtomSymbol }>)
   return labels;
 }
 
-export function generatePolymerGraph(template: PolymerTemplate, repeatCount: number): MolecularGraph {
+export function generatePolymerGraph(
+  template: PolymerTemplate,
+  repeatCount: number,
+  options: { capChainEnds?: boolean } = {},
+): MolecularGraph {
   const safeRepeats = Math.min(template.maxRepeats, Math.max(1, Math.round(repeatCount)));
   const atoms: GraphAtom[] = [];
   const bonds: GraphBond[] = [];
@@ -395,6 +399,15 @@ export function generatePolymerGraph(template: PolymerTemplate, repeatCount: num
     }
   }
 
+  // Cap the two open chain-end valences with hydrogen so the tiled polymer is a
+  // complete molecule (no dangling bonds) in both the 3D view and exports. Only
+  // the very first left anchor and last right anchor are open; every other
+  // anchor is satisfied by a repeat-link bond.
+  if (options.capChainEnds) {
+    capChainEnd(atoms, bonds, atomByTemplateAndUnit, `${template.connection.leftAtomId}:0`, -1);
+    capChainEnd(atoms, bonds, atomByTemplateAndUnit, `${template.connection.rightAtomId}:${safeRepeats - 1}`, 1);
+  }
+
   return {
     templateId: template.id,
     templateName: template.name,
@@ -404,6 +417,56 @@ export function generatePolymerGraph(template: PolymerTemplate, repeatCount: num
     groups,
     warnings: validateGraph(atoms, bonds),
   };
+}
+
+// Adds one hydrogen to a chain-end anchor, placed along the atom's open valence
+// (opposite the average direction of its existing neighbors). `fallbackSign`
+// aims the cap along the chain axis (+/-x) if the neighbor geometry is degenerate.
+const CHAIN_CAP_BOND = 1.09;
+
+function capChainEnd(
+  atoms: GraphAtom[],
+  bonds: GraphBond[],
+  atomById: Map<string, GraphAtom>,
+  anchorId: string,
+  fallbackSign: 1 | -1,
+) {
+  const anchor = atomById.get(anchorId);
+  if (!anchor) return;
+
+  const neighbors: Array<[number, number, number]> = [];
+  for (const bond of bonds) {
+    const otherId = bond.a === anchorId ? bond.b : bond.b === anchorId ? bond.a : null;
+    if (!otherId) continue;
+    const other = atomById.get(otherId);
+    if (other) neighbors.push(other.position);
+  }
+  if (neighbors.length === 0) return;
+
+  const centroid: [number, number, number] = [0, 0, 0];
+  for (const position of neighbors) {
+    centroid[0] += position[0] / neighbors.length;
+    centroid[1] += position[1] / neighbors.length;
+    centroid[2] += position[2] / neighbors.length;
+  }
+  let dir: [number, number, number] = [
+    anchor.position[0] - centroid[0],
+    anchor.position[1] - centroid[1],
+    anchor.position[2] - centroid[2],
+  ];
+  let length = Math.hypot(dir[0], dir[1], dir[2]);
+  if (length < 1e-6) {
+    dir = [fallbackSign, 0, 0];
+    length = 1;
+  }
+  const capPosition: [number, number, number] = [
+    anchor.position[0] + (dir[0] / length) * CHAIN_CAP_BOND,
+    anchor.position[1] + (dir[1] / length) * CHAIN_CAP_BOND,
+    anchor.position[2] + (dir[2] / length) * CHAIN_CAP_BOND,
+  ];
+  const capId = `cap:${anchorId}`;
+  atoms.push({ id: capId, templateAtomId: "chain-cap", element: "H", position: capPosition, unit: anchor.unit, label: "H" });
+  bonds.push({ id: `capbond:${anchorId}`, templateBondId: "chain-cap", a: anchorId, b: capId, order: 1, unit: anchor.unit });
 }
 
 export function summarizeBondOrders(graph: MolecularGraph): Record<string, number> {

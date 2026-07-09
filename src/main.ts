@@ -156,7 +156,7 @@ function rebuildGraph() {
 
   const repeatCount = isPolymerMode() ? Number(repeatRange.value) : 1;
   repeatValue.textContent = String(repeatCount);
-  currentGraph = generatePolymerGraph(currentTemplate, repeatCount);
+  currentGraph = generatePolymerGraph(currentTemplate, repeatCount, { capChainEnds: isPolymerMode() });
 
   quickLook.scheduleRefresh();
   updateSummary();
@@ -413,7 +413,7 @@ function graphForExport(): MolecularGraph | null {
   const mode = isPolymerMode() ? "polymer" : "molecule";
   const withH = templateTo3D(base, { mode, includeHydrogens: true }) ?? cleanupTemplateGeometry(base, { mode });
   const repeatCount = isPolymerMode() ? Number(repeatRange.value) : 1;
-  return generatePolymerGraph(withH, repeatCount);
+  return generatePolymerGraph(withH, repeatCount, { capChainEnds: isPolymerMode() });
 }
 
 function saveLammps() {
