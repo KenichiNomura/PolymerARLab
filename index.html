@@ -187,7 +187,8 @@
         cursor: default;
       }
 
-      .icon-toolbar button.is-active {
+      .icon-toolbar button.is-active,
+      .icon-toolbar button.is-ready {
         border-color: #ffd166;
         color: #ffd166;
         box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.5);
@@ -584,18 +585,23 @@
             <path d="M6 7h12M9.5 7V5.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M8 7l.7 11a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+        <button id="arQuickLookBtn" type="button" aria-label="AR Quick Look" title="AR Quick Look">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3.2 19.5 7.4v9.2L12 20.8 4.5 16.6V7.4L12 3.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M4.7 7.5 12 11.7l7.3-4.2M12 11.7v8.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
       <div id="arEntry"></div>
     </header>
 
     <main class="control-panel" aria-label="Structure controls">
-      <details class="control-section" open>
+      <details class="control-section">
         <summary>Edit</summary>
         <div class="section-body">
           <div class="button-row">
             <button id="uploadSketchBtn" type="button">Upload sketch</button>
             <select id="exampleStructureSelect" aria-label="Example structures"></select>
-            <button id="arQuickLookBtn" class="span-full" type="button">AR Quick Look</button>
           </div>
           <input id="sketchFileInput" type="file" accept="image/*" hidden />
 

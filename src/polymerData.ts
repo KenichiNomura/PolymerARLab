@@ -40,6 +40,8 @@ export interface PolymerTemplate {
   atoms: TemplateAtom[];
   bonds: TemplateBond[];
   groups: TemplateGroup[];
+  /** Atoms already carry final 3D coordinates; skip conformer/VSEPR layout. */
+  explicitGeometry?: boolean;
 }
 
 export interface GraphAtom {

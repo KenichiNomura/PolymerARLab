@@ -1,4 +1,5 @@
-import { POLYMER_TEMPLATES } from "../polymerData";
+import { C60_TEMPLATE } from "../c60";
+import { POLYMER_TEMPLATES, type PolymerTemplate } from "../polymerData";
 import { IMPORTED_TEMPLATE_ID } from "../structureImport";
 import type { StructureImportFormat } from "../structureImport";
 
@@ -26,11 +27,32 @@ export interface TemplateStructureExample extends BaseStructureExample {
   templateId: string;
 }
 
-export type StructureExample = ImportStructureExample | TemplateStructureExample;
+// A structure that ships as a ready-built template (baked geometry), bypassing
+// the SMILES/JSON import pipeline.
+export interface PrebuiltStructureExample extends BaseStructureExample {
+  kind: "prebuilt";
+  template: PolymerTemplate;
+}
+
+export type StructureExample =
+  | ImportStructureExample
+  | TemplateStructureExample
+  | PrebuiltStructureExample;
 
 function graphExample(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
+
+const PREBUILT_STRUCTURE_EXAMPLES: PrebuiltStructureExample[] = [
+  {
+    id: "c60",
+    label: "Molecule - buckminsterfullerene (C60)",
+    kind: "prebuilt",
+    template: C60_TEMPLATE,
+    repeats: 1,
+    mode: "molecule",
+  },
+];
 
 const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
   {
@@ -150,7 +172,11 @@ const TEMPLATE_STRUCTURE_EXAMPLES: TemplateStructureExample[] = POLYMER_TEMPLATE
   mode: "polymer",
 }));
 
-export const STRUCTURE_EXAMPLES: StructureExample[] = [...IMPORT_STRUCTURE_EXAMPLES, ...TEMPLATE_STRUCTURE_EXAMPLES];
+export const STRUCTURE_EXAMPLES: StructureExample[] = [
+  ...PREBUILT_STRUCTURE_EXAMPLES,
+  ...IMPORT_STRUCTURE_EXAMPLES,
+  ...TEMPLATE_STRUCTURE_EXAMPLES,
+];
 
 export function populateExampleSelect(select: HTMLSelectElement) {
   const placeholder = document.createElement("option");

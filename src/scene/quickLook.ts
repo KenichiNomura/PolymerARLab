@@ -17,6 +17,8 @@ export interface QuickLookOptions {
   getFileName: (graph: MolecularGraph) => string;
 }
 
+// The button is an icon; its readiness shows as a tooltip + accent class
+// rather than swapped text (which would erase the SVG).
 const IDLE_LABEL = "AR Quick Look";
 const READY_LABEL = "Open AR view";
 const PREPARE_DEBOUNCE_MS = 400;
@@ -28,7 +30,8 @@ export function createQuickLook(options: QuickLookOptions) {
 
   function scheduleRefresh() {
     prepared = null;
-    options.button.textContent = IDLE_LABEL;
+    options.button.title = IDLE_LABEL;
+    options.button.classList.remove("is-ready");
     window.clearTimeout(prepareTimer);
     prepareTimer = window.setTimeout(() => void prepare(), PREPARE_DEBOUNCE_MS);
   }
@@ -43,7 +46,8 @@ export function createQuickLook(options: QuickLookOptions) {
       .then((blob) => {
         if (graph === options.getGraph()) {
           prepared = { blob, fileName: options.getFileName(graph), graph };
-          options.button.textContent = READY_LABEL;
+          options.button.title = READY_LABEL;
+          options.button.classList.add("is-ready");
         }
       })
       .catch((error) => {
@@ -85,9 +89,9 @@ export function createQuickLook(options: QuickLookOptions) {
       }
       if (isIOSDevice()) {
         // Opening now would fall outside this tap's user activation and
-        // show a blank page instead of Quick Look; the button now reads
-        // "Open AR view" and the next tap opens instantly.
-        showStatus("AR model ready - tap 'Open AR view' to place it on a surface.");
+        // show a blank page instead of Quick Look; the button is now marked
+        // ready and the next tap opens instantly.
+        showStatus("AR model ready - tap the AR button again to place it on a surface.");
       } else {
         openUSDZBlob(prepared.blob, prepared.fileName);
         showStatus("USDZ file saved. AirDrop or send it to an iPhone and open it for native AR.");

@@ -108,6 +108,9 @@ let geometryCache: {
 } | null = null;
 
 function templateGeometry(template: PolymerTemplate, mode: "molecule" | "polymer"): PolymerTemplate {
+  // Structures that ship with baked 3D coordinates (e.g. C60) skip both the
+  // conformer generator and the VSEPR fallback.
+  if (template.explicitGeometry) return template;
   const hydrogens = hydrogensToggle.checked;
   const cache = geometryCache;
   if (cache && cache.template === template && cache.mode === mode && cache.hydrogens === hydrogens) {
@@ -272,6 +275,18 @@ async function useSelectedExample() {
   const example = STRUCTURE_EXAMPLES.find((candidate) => candidate.id === exampleStructureSelect.value);
   if (!example) return;
   setPolymerMode(example.mode === "polymer");
+  if (example.kind === "prebuilt") {
+    // A ready-built template with baked geometry occupies the "imported" slot.
+    importedTemplate = example.template;
+    importedTemplateOption.hidden = false;
+    importedTemplateOption.textContent = `${example.template.shortName} - ${example.template.name}`;
+    polymerSelect.value = IMPORTED_TEMPLATE_ID;
+    repeatRange.value = "1";
+    rebuildGraph();
+    showImportStatus(`Loaded example: ${example.label}.`);
+    showStatus(`Verification target: ${example.template.shortName}.`);
+    return;
+  }
   if (example.kind === "template") {
     const template = getTemplate(example.templateId);
     polymerSelect.value = template.id;
@@ -486,7 +501,7 @@ arQuickLookBtn.addEventListener("click", () => {
   // camera fully released (same reason WebXR stops it on session start).
   if (cameraOverlay.isActive()) {
     cameraOverlay.stop();
-    showStatus("Camera stopped - tap Open AR view again to place it in AR.");
+    showStatus("Camera stopped - tap the AR button again to place it in AR.");
     return;
   }
   void quickLook.handleTap();
@@ -510,7 +525,10 @@ three = initThreeRuntime(appEl, (message) => {
 });
 
 updateStructureModeUi();
-rebuildGraph();
+// Show C60 by default (baked geometry — needs neither RDKit nor conformer
+// resources, so it renders immediately on boot).
+exampleStructureSelect.value = "c60";
+void useSelectedExample();
 
 if (three) {
   document.body.classList.add("webgl-ready");
