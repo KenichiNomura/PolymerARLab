@@ -42,6 +42,9 @@ export interface PolymerTemplate {
   groups: TemplateGroup[];
   /** Atoms already carry final 3D coordinates; skip conformer/VSEPR layout. */
   explicitGeometry?: boolean;
+  /** Radians to rotate each successive repeat unit about the backbone (+x) axis
+   *  so side groups spiral clear of neighbours. Defaults to PI (syndiotactic flip). */
+  twist?: number;
 }
 
 export interface GraphAtom {
@@ -302,10 +305,15 @@ export function getTemplate(id: string): PolymerTemplate {
   return POLYMER_TEMPLATES.find((template) => template.id === id) ?? POLYMER_TEMPLATES[0];
 }
 
-function orientSyndiotacticSideGroup(position: [number, number, number], unitIndex: number): [number, number, number] {
+// Rotate a repeat unit's local coordinates about the backbone (+x) axis. At
+// angle = PI this is the syndiotactic y/z flip; conformer-derived polymers pass
+// a per-unit angle chosen to spiral side groups clear of neighbours (see
+// bestTwist in conformer3d.ts).
+function rotateAboutBackbone(position: [number, number, number], angle: number): [number, number, number] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
   const [x, y, z] = position;
-  const side = unitIndex % 2 === 0 ? 1 : -1;
-  return [x, y * side, z * side];
+  return [x, y * cos - z * sin, y * sin + z * cos];
 }
 
 function addVec(a: [number, number, number], b: [number, number, number]): [number, number, number] {
@@ -345,13 +353,14 @@ export function generatePolymerGraph(
   const groups: GraphGroup[] = [];
   const atomByTemplateAndUnit = new Map<string, GraphAtom>();
   const labels = elementLabels(template.atoms);
+  const twist = template.twist ?? Math.PI;
 
   for (let unit = 0; unit < safeRepeats; unit++) {
     const unitBase = scaleVec(template.step, unit);
 
     for (const templateAtom of template.atoms) {
       const id = `${templateAtom.id}:${unit}`;
-      const localPosition = orientSyndiotacticSideGroup(templateAtom.position, unit);
+      const localPosition = rotateAboutBackbone(templateAtom.position, unit * twist);
       const position = addVec(unitBase, localPosition);
       const graphAtom: GraphAtom = {
         id,

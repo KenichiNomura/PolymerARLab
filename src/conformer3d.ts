@@ -80,6 +80,7 @@ export function templateTo3D(template: PolymerTemplate, options: Conformer3DOpti
           ...template,
           atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(positions[index]) })),
           step: [round(aligned.stepX), 0, 0],
+          twist: aligned.twist,
         },
         hydrogens,
       );
@@ -257,7 +258,7 @@ function alignToConnection(
   template: PolymerTemplate,
   positions: Vec3[],
   hydrogens: HydrogenRecord[],
-): { positions: Vec3[]; hydrogens: HydrogenRecord[]; stepX: number } | null {
+): { positions: Vec3[]; hydrogens: HydrogenRecord[]; stepX: number; twist: number } | null {
   const leftIndex = template.atoms.findIndex((atom) => atom.id === template.connection.leftAtomId);
   const rightIndex = template.atoms.findIndex((atom) => atom.id === template.connection.rightAtomId);
   if (leftIndex < 0 || rightIndex < 0 || leftIndex === rightIndex) return null;
@@ -280,49 +281,52 @@ function alignToConnection(
   const alignedPositions = positions.map(transform);
   const alignedHydrogens = hydrogens.map((hydrogen) => ({ ...hydrogen, position: transform(hydrogen.position) }));
   const allPoints = [...alignedPositions, ...alignedHydrogens.map((hydrogen) => hydrogen.position)];
+  const stepX = axisLength + REPEAT_LINK_BOND; // natural link bond; bonds are never stretched
 
   return {
     positions: alignedPositions,
     hydrogens: alignedHydrogens,
-    stepX: clashFreeStepX(allPoints, axisLength, leftIndex, rightIndex),
+    stepX,
+    twist: bestTwist(allPoints, stepX, leftIndex, rightIndex),
   };
 }
 
-// Widen the per-unit translation so neighbouring repeat units do not overlap.
-// Starts from the ideal (attachment span + one link bond) and grows only as much
-// as needed, so slim backbones (e.g. polyethylene) stay tight while bulky
-// side-groups get room. Consecutive units alternate the syndiotactic y/z flip
-// (see orientSyndiotacticSideGroup), so both orderings are checked.
-const MIN_INTERUNIT_CONTACT = 1.15; // Å; closest allowed non-bonded approach between units (mild residual is relieved by the LAMMPS warm-up)
-const STEP_INCREMENT = 0.1;
+// Rotate each successive repeat unit about the backbone axis (+x) so side groups
+// spiral around the chain and avoid overlapping the neighbour, *without*
+// stretching the inter-unit bond. Both anchors lie on the axis, so rotating
+// about it leaves the backbone bond lengths unchanged. Because rotation about x
+// commutes with translation along x, the closest approach between any two
+// consecutive units depends only on this relative angle, so we pick the angle
+// that maximizes it. Falls back to the 180deg syndiotactic flip when no
+// candidate is clearly better.
+const TWIST_CANDIDATES = 36;
 
-function clashFreeStepX(points: Vec3[], axisLength: number, leftIndex: number, rightIndex: number): number {
-  const base = axisLength + REPEAT_LINK_BOND;
-  const flipped = points.map((p): Vec3 => [p[0], -p[1], -p[2]]);
-  const min2 = MIN_INTERUNIT_CONTACT * MIN_INTERUNIT_CONTACT;
-
-  const clashes = (stepX: number): boolean => {
-    for (const [a, b] of [
-      [points, flipped],
-      [flipped, points],
-    ] as const) {
-      for (let i = 0; i < a.length; i++) {
-        for (let j = 0; j < b.length; j++) {
-          if (i === rightIndex && j === leftIndex) continue; // the inter-unit link bond itself
-          const dx = a[i][0] - (b[j][0] + stepX);
-          const dy = a[i][1] - b[j][1];
-          const dz = a[i][2] - b[j][2];
-          if (dx * dx + dy * dy + dz * dz < min2) return true;
-        }
+function bestTwist(points: Vec3[], stepX: number, leftIndex: number, rightIndex: number): number {
+  let bestAngle = Math.PI;
+  let bestMinD2 = -Infinity;
+  for (let k = 0; k < TWIST_CANDIDATES; k++) {
+    const angle = (2 * Math.PI * k) / TWIST_CANDIDATES;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    let minD2 = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const [ax, ay, az] = points[i];
+      for (let j = 0; j < points.length; j++) {
+        if (i === rightIndex && j === leftIndex) continue; // the inter-unit link bond itself
+        const p = points[j];
+        const dx = ax - (p[0] + stepX);
+        const dy = ay - (p[1] * cos - p[2] * sin);
+        const dz = az - (p[1] * sin + p[2] * cos);
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < minD2) minD2 = d2;
       }
     }
-    return false;
-  };
-
-  let stepX = base;
-  const cap = base + 15;
-  while (stepX < cap && clashes(stepX)) stepX += STEP_INCREMENT;
-  return stepX;
+    if (minD2 > bestMinD2) {
+      bestMinD2 = minD2;
+      bestAngle = angle;
+    }
+  }
+  return bestAngle;
 }
 
 function centerPositions(positions: Vec3[]): Vec3[] {
