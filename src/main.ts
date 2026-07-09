@@ -34,7 +34,7 @@ import {
   importStructure,
   type StructureImportFormat,
 } from "./structureImport";
-import { STRUCTURE_EXAMPLES, populateExampleSelect, populateTemplateSelect } from "./ui/examples";
+import { populateTemplateSelect } from "./ui/examples";
 import { showImportStatus, showPlatformStatus, showScanStatus, showStatus } from "./ui/status";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
@@ -48,7 +48,6 @@ const videoEl = document.getElementById("cameraFeed") as HTMLVideoElement;
 const arEntryEl = document.getElementById("arEntry")!;
 const polymerSelect = document.getElementById("polymerSelect") as HTMLSelectElement;
 const makePolymerPanel = document.getElementById("makePolymerPanel") as HTMLDetailsElement;
-const exampleStructureSelect = document.getElementById("exampleStructureSelect") as HTMLSelectElement;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
@@ -179,7 +178,6 @@ function clearMolecule() {
   fallbackEl.innerHTML = "";
   structureSummary.textContent = "No structure loaded.";
   validationStatus.textContent = "";
-  exampleStructureSelect.value = "";
   scanPreview.classList.remove("has-capture");
   scanPreview.style.backgroundImage = "";
   quickLook.scheduleRefresh();
@@ -292,7 +290,6 @@ function showImportedTemplate(template: PolymerTemplate, statusMessage: string) 
   importedTemplateOption.hidden = false;
   importedTemplateOption.textContent = `${template.shortName} - ${template.name}`;
   polymerSelect.value = IMPORTED_TEMPLATE_ID;
-  exampleStructureSelect.value = "";
   repeatRange.value = "1";
   rebuildGraph();
   populateAnchorControls(template);
@@ -345,7 +342,6 @@ function makeRepeatUnit() {
     importedTemplateOption.hidden = false;
     importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
     polymerSelect.value = IMPORTED_TEMPLATE_ID;
-    exampleStructureSelect.value = "";
     repeatRange.value = String(derived.defaultRepeats);
     rebuildGraph();
     showImportStatus(`Repeat unit from ${anchorASelect.value}-${anchorBSelect.value}: ${derived.name}.`);
@@ -355,24 +351,6 @@ function makeRepeatUnit() {
     showImportStatus(message);
     showStatus(`Could not derive a repeat unit: ${message}`, true);
   }
-}
-
-async function useSelectedExample() {
-  const example = STRUCTURE_EXAMPLES.find((candidate) => candidate.id === exampleStructureSelect.value);
-  if (!example) return;
-  setPolymerMode(example.mode === "polymer");
-  if (example.kind === "template") {
-    const template = getTemplate(example.templateId);
-    polymerSelect.value = template.id;
-    repeatRange.value = String(clampRepeats(example.repeats, template.maxRepeats));
-    rebuildGraph();
-    showImportStatus(`Loaded example: ${template.shortName} - ${template.name}.`);
-    showStatus(`Verification target: ${template.shortName}.`);
-    return;
-  }
-
-  showImportStatus(`Loading example: ${example.label}.`);
-  await loadImportedStructure(example.input, example.format, { repeatOverride: example.repeats });
 }
 
 // Fetch a molecule from PubChem by CID or name and render it with PubChem's own
@@ -540,9 +518,6 @@ polymerSelect.addEventListener("change", () => {
   showStatus(`Verification target: ${template.shortName}.`);
 });
 
-exampleStructureSelect.addEventListener("change", () => {
-  void useSelectedExample();
-});
 pubchemLoadBtn.addEventListener("click", () => {
   void loadFromPubChem();
 });
@@ -609,7 +584,6 @@ arQuickLookBtn.addEventListener("click", () => {
 aiRecognitionEndpoint();
 aiAccessToken();
 
-populateExampleSelect(exampleStructureSelect);
 polymerSelect.value = currentTemplate.id;
 repeatRange.value = String(currentTemplate.defaultRepeats);
 repeatRange.max = String(currentTemplate.maxRepeats);
