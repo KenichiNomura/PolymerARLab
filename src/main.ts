@@ -3,6 +3,7 @@ import { C60_TEMPLATE } from "./c60";
 import { createCameraOverlay } from "./cameraOverlay";
 import { conformerResourcesReady, preloadConformerResources, templateTo3D } from "./conformer3d";
 import { renderFallbackGraph } from "./fallback2d";
+import { buildReaxFFData, buildReaxFFInput, downloadTextFile } from "./lammpsExport";
 import { isIOSDevice } from "./platform";
 import {
   POLYMER_TEMPLATES,
@@ -59,6 +60,7 @@ const cameraModeBtn = document.getElementById("cameraModeBtn") as HTMLButtonElem
 const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
 const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
+const saveLammpsBtn = document.getElementById("saveLammpsBtn") as HTMLButtonElement;
 const pubchemInput = document.getElementById("pubchemInput") as HTMLInputElement;
 const pubchemLoadBtn = document.getElementById("pubchemLoadBtn") as HTMLButtonElement;
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
@@ -397,6 +399,41 @@ async function loadFromPubChem() {
 }
 
 // ---------------------------------------------------------------------------
+// LAMMPS export (ReaxFF): geometry with hydrogens, ready to relax
+// ---------------------------------------------------------------------------
+
+// Always returns a hydrogens-included graph. If hydrogens are hidden and the
+// structure is conformer-based, rebuild an H-included graph for export without
+// disturbing the on-screen view. explicitGeometry templates (PubChem/C60) carry
+// their own atoms, so currentGraph already reflects them.
+function graphForExport(): MolecularGraph | null {
+  if (!currentGraph) return null;
+  const base = getActiveTemplate(polymerSelect.value);
+  if (hydrogensToggle.checked || base.explicitGeometry) return currentGraph;
+  const mode = isPolymerMode() ? "polymer" : "molecule";
+  const withH = templateTo3D(base, { mode, includeHydrogens: true }) ?? cleanupTemplateGeometry(base, { mode });
+  const repeatCount = isPolymerMode() ? Number(repeatRange.value) : 1;
+  return generatePolymerGraph(withH, repeatCount);
+}
+
+function saveLammps() {
+  const graph = graphForExport();
+  if (!graph) {
+    showStatus("Load or build a structure first, then Save.", true);
+    return;
+  }
+  const baseName =
+    (currentTemplate.shortName || currentTemplate.name || "structure").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") ||
+    "structure";
+  const data = buildReaxFFData(graph, baseName);
+  downloadTextFile(`${baseName}.data`, data.text);
+  downloadTextFile("in.relax", buildReaxFFInput(data.elementsInTypeOrder, baseName));
+  const summary = `Saved ${baseName}.data (${data.atomCount} atoms: ${data.elementsInTypeOrder.join(", ")}) and in.relax. Supply a ReaxFF ffield.reax to relax.`;
+  showImportStatus(summary);
+  showStatus(summary);
+}
+
+// ---------------------------------------------------------------------------
 // Scan capture (camera frame or uploaded image -> recognition)
 // ---------------------------------------------------------------------------
 
@@ -515,6 +552,7 @@ pubchemInput.addEventListener("keydown", (event) => {
   }
 });
 makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
+saveLammpsBtn.addEventListener("click", saveLammps);
 repeatRange.addEventListener("input", rebuildGraph);
 
 labelsToggle.addEventListener("change", () => {
