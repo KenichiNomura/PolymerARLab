@@ -34,7 +34,9 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
       options.overlayEl.classList.add("camera-overlay");
       const runtime = options.getRuntime();
       if (runtime) setBackgroundVisible(runtime, false);
-      options.toggleButton.textContent = "Stop camera";
+      options.toggleButton.classList.add("is-active");
+      options.toggleButton.setAttribute("aria-pressed", "true");
+      options.toggleButton.title = "Stop camera";
       options.captureButton.disabled = false;
       showScanStatus("Camera overlay active. Capture your sketch, then verify the structure model.");
     } catch (error) {
@@ -54,7 +56,9 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
     options.overlayEl.classList.remove("camera-overlay");
     const runtime = options.getRuntime();
     if (runtime) setBackgroundVisible(runtime, true);
-    options.toggleButton.textContent = "Camera AR";
+    options.toggleButton.classList.remove("is-active");
+    options.toggleButton.setAttribute("aria-pressed", "false");
+    options.toggleButton.title = "Camera AR";
     options.captureButton.disabled = true;
   }
 

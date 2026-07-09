@@ -150,25 +150,47 @@
         pointer-events: none;
       }
 
-      .brand {
+      .icon-toolbar {
         display: flex;
-        flex-direction: column;
-        gap: 2px;
+        flex-wrap: wrap;
+        gap: 8px;
         min-width: 0;
         pointer-events: auto;
       }
 
-      .brand h1 {
-        margin: 0;
-        font-size: clamp(18px, 2.4vw, 28px);
-        line-height: 1;
-        letter-spacing: 0;
+      .icon-toolbar button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 1px solid rgba(247, 243, 232, 0.16);
+        border-radius: 6px;
+        background: rgba(16, 18, 17, 0.82);
+        color: #f7f3e8;
+        backdrop-filter: blur(18px);
+        cursor: pointer;
       }
 
-      .brand span {
-        color: rgba(247, 243, 232, 0.72);
-        font-size: 12px;
-        line-height: 1.25;
+      .icon-toolbar button svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .icon-toolbar button:hover:not(:disabled) {
+        background: rgba(247, 243, 232, 0.14);
+      }
+
+      .icon-toolbar button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+
+      .icon-toolbar button.is-active {
+        border-color: #ffd166;
+        color: #ffd166;
+        box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.5);
       }
 
       #arEntry {
@@ -508,10 +530,6 @@
       }
 
       @media (max-width: 520px) {
-        .brand span {
-          display: none;
-        }
-
         .control-panel {
           max-height: 54vh;
           overflow: auto;
@@ -542,22 +560,39 @@
     <div id="fallbackMolecule"></div>
 
     <header class="topbar">
-      <div class="brand">
-        <h1>Polymer AR Lab</h1>
-        <span>Graph-based repeat units with explicit bond orders</span>
+      <div class="icon-toolbar">
+        <button id="cameraModeBtn" type="button" aria-label="Camera AR" title="Camera AR" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h1.7l1-1.6a1 1 0 0 1 .85-.47h5.9a1 1 0 0 1 .85.47l1 1.6h1.7A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="12" cy="12.4" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+        </button>
+        <button id="captureBtn" type="button" aria-label="Capture" title="Capture" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="12" cy="12" r="4" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="resetViewBtn" type="button" aria-label="Reset view" title="Reset view">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M5 12a7 7 0 1 1 2.05 4.95" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M5 7.5V12h4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="clearBtn" type="button" aria-label="Clear" title="Clear">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 7h12M9.5 7V5.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M8 7l.7 11a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
       <div id="arEntry"></div>
     </header>
 
     <main class="control-panel" aria-label="Structure controls">
       <details class="control-section" open>
-        <summary>View and AR</summary>
+        <summary>Edit</summary>
         <div class="section-body">
           <div class="button-row">
-            <button id="cameraModeBtn" type="button">Camera AR</button>
-            <button id="captureBtn" type="button" disabled>Capture</button>
-            <button id="resetViewBtn" type="button">Reset view</button>
-            <button id="clearBtn" type="button">Clear</button>
             <button id="uploadSketchBtn" type="button">Upload sketch</button>
             <select id="exampleStructureSelect" aria-label="Example structures"></select>
             <button id="arQuickLookBtn" class="span-full" type="button">AR Quick Look</button>
@@ -573,12 +608,7 @@
             <input id="hydrogensToggle" type="checkbox" checked />
             <label for="hydrogensToggle">Show hydrogens</label>
           </div>
-        </div>
-      </details>
 
-      <details class="control-section">
-        <summary>Structure</summary>
-        <div class="section-body">
           <div class="toggle mode-toggle">
             <label for="polymerModeToggle">Polymer repeat unit</label>
             <input id="polymerModeToggle" type="checkbox" />
@@ -620,7 +650,6 @@
             </div>
           </details>
           <div id="importStatus">Template library active.</div>
-
         </div>
       </details>
 
