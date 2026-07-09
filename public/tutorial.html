@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polymer AR Lab — Tutorial</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f5ef;
+        --panel: #ffffff;
+        --ink: #1a1d1b;
+        --muted: #5c635e;
+        --line: rgba(20, 24, 22, 0.14);
+        --accent: #1e7d74;
+        --accent-2: #b8860b;
+        --chip: rgba(30, 125, 116, 0.1);
+        --icon-bg: #101211;
+        --icon-fg: #f7f3e8;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d0f0e;
+          --panel: #161a18;
+          --ink: #f2efe6;
+          --muted: #a6ada7;
+          --line: rgba(247, 243, 232, 0.16);
+          --accent: #58d6c6;
+          --accent-2: #f2b84b;
+          --chip: rgba(88, 214, 198, 0.14);
+          --icon-bg: #05201d;
+          --icon-fg: #eafffb;
+        }
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 80px; }
+      header.hero {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 26px 24px;
+        background: linear-gradient(135deg, rgba(30, 125, 116, 0.12), rgba(184, 134, 11, 0.08)), var(--panel);
+      }
+      h1 { margin: 0 0 6px; font-size: clamp(24px, 4.4vw, 34px); letter-spacing: -0.01em; }
+      h2 {
+        margin: 44px 0 4px; font-size: clamp(19px, 3.4vw, 24px);
+        display: flex; align-items: center; gap: 10px;
+      }
+      h3 { margin: 22px 0 6px; font-size: 17px; }
+      p { margin: 10px 0; }
+      .lede { color: var(--muted); font-size: 17px; margin-top: 8px; }
+      .muted { color: var(--muted); }
+      a { color: var(--accent); }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--chip); color: var(--ink);
+        padding: 1px 6px; border-radius: 5px; font-size: 0.9em;
+        overflow-wrap: anywhere;
+      }
+      .stepnum {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 50%;
+        background: var(--accent); color: #fff; font-weight: 700; font-size: 15px;
+        flex: 0 0 auto;
+      }
+      .badge {
+        display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--accent);
+        background: var(--chip); border-radius: 999px; padding: 3px 10px;
+      }
+      .card {
+        border: 1px solid var(--line); border-radius: 14px;
+        background: var(--panel); padding: 18px 18px; margin: 16px 0;
+      }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
+
+      /* Icon legend */
+      .legend { display: grid; gap: 10px; }
+      .legend-row { display: grid; grid-template-columns: 48px 1fr; gap: 14px; align-items: center; }
+      .icon-btn {
+        width: 44px; height: 44px; border-radius: 9px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--icon-bg); color: var(--icon-fg);
+        border: 1px solid var(--line);
+      }
+      .icon-btn svg { width: 24px; height: 24px; }
+      .icon-btn.accent { color: var(--accent-2); border-color: var(--accent-2); box-shadow: 0 0 0 1px rgba(242,184,75,0.4); }
+      .legend-row b { display: block; }
+      .legend-row .what { color: var(--muted); font-size: 14.5px; }
+
+      ol.steps { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 14px; }
+      ol.steps > li { display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: start; }
+      ol.steps > li > div > b { color: var(--ink); }
+
+      figure { margin: 14px 0; }
+      figure svg { width: 100%; height: auto; display: block; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+      figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; text-align: center; }
+
+      .diagram-ink { fill: none; stroke: currentColor; }
+      .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+      .toc a { text-decoration: none; }
+      .toc .chip {
+        border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
+        font-size: 14px; color: var(--ink); background: var(--panel);
+      }
+      .callout {
+        border-left: 3px solid var(--accent-2); background: var(--chip);
+        border-radius: 8px; padding: 10px 14px; margin: 14px 0; font-size: 14.5px;
+      }
+      .platform { display: inline-flex; gap: 6px; align-items: center; font-weight: 700; font-size: 13px; }
+      hr { border: none; border-top: 1px solid var(--line); margin: 40px 0; }
+      footer { color: var(--muted); font-size: 13px; margin-top: 40px; text-align: center; }
+      .scroll { overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <span class="badge">Tutorial</span>
+        <h1>Polymer AR Lab</h1>
+        <p class="lede">
+          Turn a hand-drawn Lewis structure — or any molecule from PubChem — into an interactive 3-D model,
+          view it in augmented reality on the desk in front of you, build polymer chains, and export ready-to-run
+          LAMMPS input for a quick relaxation.
+        </p>
+        <p class="muted" style="margin-bottom:0">
+          🖥️ <b>Desktop</b> and 📱 <b>mobile</b> both work. On a phone you scan with the live camera; on a
+          computer you upload a photo. Everything runs in your browser — nothing to install.
+        </p>
+        <nav class="toc">
+          <a href="#tour"><span class="chip">Interface tour</span></a>
+          <a href="#scan"><span class="chip">① Scan a sketch → AR</span></a>
+          <a href="#polymer"><span class="chip">② PubChem → polymer → LAMMPS</span></a>
+          <a href="#tips"><span class="chip">Tips</span></a>
+        </nav>
+      </header>
+
+      <!-- ============================ INTERFACE TOUR ============================ -->
+      <h2 id="tour">The interface at a glance</h2>
+      <p>
+        The 3-D molecule fills the screen. Controls sit in the corners: a row of tool
+        icons at the <b>top-left</b>, two panel toggles at the <b>bottom-left</b>, and the
+        immersive-AR button at the <b>top-right</b>.
+      </p>
+
+      <figure class="scroll">
+        <svg viewBox="0 0 760 300" role="img" aria-label="Screen layout map">
+          <rect x="1" y="1" width="758" height="298" rx="12" class="diagram-ink" stroke-width="1.5" opacity="0.5"/>
+          <!-- top-left toolbar -->
+          <rect x="16" y="16" width="250" height="40" rx="8" fill="var(--icon-bg)"/>
+          <text x="20" y="72" fill="var(--muted)" font-size="12">Top-left: tool icons</text>
+          <!-- top-right AR -->
+          <rect x="620" y="16" width="124" height="40" rx="8" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="744" y="72" fill="var(--muted)" font-size="12" text-anchor="end">Top-right: Start AR (Android)</text>
+          <!-- center molecule -->
+          <circle cx="380" cy="160" r="9" fill="var(--accent)"/>
+          <circle cx="420" cy="140" r="9" fill="var(--accent-2)"/>
+          <circle cx="345" cy="185" r="7" fill="var(--muted)"/>
+          <line x1="380" y1="160" x2="420" y2="140" class="diagram-ink" stroke-width="3"/>
+          <line x1="380" y1="160" x2="345" y2="185" class="diagram-ink" stroke-width="3"/>
+          <text x="380" y="230" fill="var(--muted)" font-size="12" text-anchor="middle">3-D model (drag to orbit, scroll/pinch to zoom)</text>
+          <!-- bottom-left dock -->
+          <rect x="16" y="244" width="92" height="40" rx="8" fill="var(--icon-bg)"/>
+          <text x="20" y="236" fill="var(--muted)" font-size="12">Bottom-left: Edit / Status panels</text>
+        </svg>
+        <figcaption>Where the controls live on screen.</figcaption>
+      </figure>
+
+      <h3>Top-left tool icons</h3>
+      <div class="card legend">
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h1.7l1-1.6a1 1 0 0 1 .85-.47h5.9a1 1 0 0 1 .85.47l1 1.6h1.7A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12.4" r="3.1" class="diagram-ink" stroke-width="1.6"/></svg></span>
+          <div><b>Camera</b><span class="what">Turn the live camera on/off to scan a drawing (mainly for phones). Lights up when active.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="diagram-ink" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg></span>
+          <div><b>Capture</b><span class="what">Take a snapshot of the camera view and recognize the Lewis structure. Enabled only while the camera is on.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 1 2.05 4.95" class="diagram-ink" stroke-width="1.6" stroke-linecap="round"/><path d="M5 7.5V12h4.5" class="diagram-ink" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div><b>Reset view</b><span class="what">Recenter the camera on the molecule if you've orbited or zoomed away.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9.5 7V5.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M8 7l.7 11a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" class="diagram-ink" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div><b>Clear</b><span class="what">Remove the current molecule and start from a blank scene.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn accent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 19.5 7.4v9.2L12 20.8 4.5 16.6V7.4L12 3.2Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/><path d="M4.7 7.5 12 11.7l7.3-4.2M12 11.7v8.9" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+          <div><b>AR View</b><span class="what">On iPhone/iPad, open the molecule in AR Quick Look to place it on a real surface. Glows amber when the AR model is ready. (On desktop it downloads a <code>.usdz</code> file.)</span></div>
+        </div>
+      </div>
+
+      <h3>Bottom-left panel toggles</h3>
+      <div class="card legend">
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3l3 3M4.5 16.2 15 5.7a1.6 1.6 0 0 1 2.3 0l1 1a1.6 1.6 0 0 1 0 2.3L7.8 19.5l-4 1 1-4Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+          <div><b>Edit</b><span class="what">Open/close the main control panel: upload a sketch, load from PubChem, toggle labels/hydrogens, build a polymer, and save LAMMPS files.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2" class="diagram-ink" stroke-width="1.6"/><circle cx="12" cy="8.1" r="1.05" fill="currentColor"/><path d="M12 11.2v5.2" class="diagram-ink" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+          <div><b>Status</b><span class="what">Show/hide a small panel with the molecule summary (atoms, bonds, bond orders), the latest message, and a valence check.</span></div>
+        </div>
+      </div>
+
+      <h3>Inside the Edit panel</h3>
+      <div class="grid2">
+        <figure>
+          <svg viewBox="0 0 300 340" role="img" aria-label="Edit panel mockup">
+            <rect x="1" y="1" width="298" height="338" rx="12" class="diagram-ink" stroke-width="1.5" opacity="0.6"/>
+            <rect x="16" y="16" width="268" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="150" y="36" text-anchor="middle" font-size="13" fill="currentColor">Upload sketch</text>
+
+            <rect x="16" y="56" width="196" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="26" y="76" font-size="12" fill="var(--muted)">PubChem name or CID</text>
+            <rect x="220" y="56" width="64" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="252" y="76" text-anchor="middle" font-size="13" fill="currentColor">Load</text>
+
+            <rect x="16" y="100" width="16" height="16" rx="3" class="diagram-ink" stroke-width="1.3"/>
+            <text x="40" y="113" font-size="12.5" fill="currentColor">Atom labels</text>
+            <rect x="16" y="126" width="16" height="16" rx="3" fill="var(--accent)"/>
+            <path d="M19.5 134 l3 3 l6 -6" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            <text x="40" y="139" font-size="12.5" fill="currentColor">Show hydrogens</text>
+
+            <rect x="16" y="156" width="268" height="30" rx="7" fill="var(--chip)" stroke="var(--accent)" stroke-width="1.2"/>
+            <text x="150" y="176" text-anchor="middle" font-size="13" fill="currentColor">Save LAMMPS (UFF)</text>
+
+            <rect x="16" y="196" width="268" height="128" rx="8" class="diagram-ink" stroke-width="1.3" stroke-dasharray="4 4"/>
+            <text x="28" y="216" font-size="12.5" font-weight="700" fill="currentColor">▸ Make Polymer from Monomer</text>
+            <rect x="28" y="228" width="118" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="34" y="245" font-size="11.5" fill="var(--muted)">Anchor 1 ▾</text>
+            <rect x="154" y="228" width="118" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="160" y="245" font-size="11.5" fill="var(--muted)">Anchor 2 ▾</text>
+            <rect x="28" y="262" width="244" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="150" y="279" text-anchor="middle" font-size="12.5" fill="currentColor">Make repeat unit</text>
+            <text x="28" y="308" font-size="11.5" fill="var(--muted)">Repeats</text>
+            <line x1="86" y1="304" x2="262" y2="304" class="diagram-ink" stroke-width="2"/>
+            <circle cx="150" cy="304" r="6" fill="var(--accent-2)"/>
+          </svg>
+          <figcaption>The Edit panel (tap the pencil icon).</figcaption>
+        </figure>
+        <div class="card" style="margin-top:0">
+          <h3 style="margin-top:0">What each control does</h3>
+          <p><b>Upload sketch</b> — pick a photo of a Lewis structure (best on desktop).</p>
+          <p><b>PubChem</b> — type a name (e.g. <code>caffeine</code>) or a CID (e.g. <code>2244</code>) and press <b>Load</b> to fetch the real 3-D structure.</p>
+          <p><b>Atom labels</b> — show each atom's element + index (C1, C2, O1…). You use these labels to pick polymer anchors.</p>
+          <p><b>Show hydrogens</b> — display/hide H atoms (on by default; keep it on before saving LAMMPS files).</p>
+          <p><b>Save LAMMPS (UFF)</b> — download a data file + input script to relax the current structure.</p>
+          <p><b>Make Polymer from Monomer</b> — turn the loaded molecule into a chain (details in Walkthrough ②).</p>
+        </div>
+      </div>
+
+      <hr />
+
+      <!-- ============================ WALKTHROUGH A ============================ -->
+      <h2 id="scan">① Scan a hand-drawn Lewis structure &amp; view it in AR</h2>
+      <p>Draw a molecule on paper, let the app recognize it into 3-D, then stand it up on your desk in AR.</p>
+
+      <figure class="scroll">
+        <svg viewBox="0 0 760 170" role="img" aria-label="Scan to AR flow">
+          <!-- paper -->
+          <rect x="20" y="35" width="120" height="100" rx="6" class="diagram-ink" stroke-width="1.5"/>
+          <text x="52" y="70" font-size="20" fill="currentColor">O=C=O</text>
+          <text x="80" y="152" font-size="12" fill="var(--muted)" text-anchor="middle">1. Draw on paper</text>
+          <!-- arrow -->
+          <path d="M150 85 h60" class="diagram-ink" stroke-width="2" marker-end="url(#ar)"/>
+          <!-- phone -->
+          <rect x="220" y="30" width="120" height="110" rx="12" class="diagram-ink" stroke-width="1.5"/>
+          <rect x="232" y="42" width="96" height="70" rx="4" class="diagram-ink" stroke-width="1"/>
+          <text x="255" y="82" font-size="14" fill="currentColor">O=C=O</text>
+          <circle cx="280" cy="126" r="7" fill="var(--accent)"/>
+          <text x="280" y="152" font-size="12" fill="var(--muted)" text-anchor="middle">2. Camera → Capture</text>
+          <path d="M350 85 h60" class="diagram-ink" stroke-width="2" marker-end="url(#ar)"/>
+          <!-- 3d -->
+          <circle cx="470" cy="85" r="12" fill="var(--muted)"/>
+          <circle cx="435" cy="85" r="9" fill="#d33"/>
+          <circle cx="505" cy="85" r="9" fill="#d33"/>
+          <line x1="470" y1="85" x2="435" y2="85" class="diagram-ink" stroke-width="4"/>
+          <line x1="470" y1="85" x2="505" y2="85" class="diagram-ink" stroke-width="4"/>
+          <text x="470" y="152" font-size="12" fill="var(--muted)" text-anchor="middle">3. 3-D model</text>
+          <path d="M525 85 h60" class="diagram-ink" stroke-width="2" marker-end="url(#ar)"/>
+          <!-- AR on desk -->
+          <path d="M600 120 l70 -18 l70 18 l-70 18 Z" class="diagram-ink" stroke-width="1.4" fill="var(--chip)"/>
+          <circle cx="670" cy="80" r="10" fill="var(--muted)"/>
+          <circle cx="648" cy="86" r="7" fill="#d33"/>
+          <circle cx="692" cy="86" r="7" fill="#d33"/>
+          <line x1="670" y1="80" x2="648" y2="86" class="diagram-ink" stroke-width="3"/>
+          <line x1="670" y1="80" x2="692" y2="86" class="diagram-ink" stroke-width="3"/>
+          <text x="670" y="158" font-size="12" fill="var(--muted)" text-anchor="middle">4. In AR on the desk</text>
+          <defs>
+            <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="currentColor"/></marker>
+          </defs>
+        </svg>
+        <figcaption>Paper sketch → captured → recognized in 3-D → placed in AR.</figcaption>
+      </figure>
+
+      <ol class="steps">
+        <li><span class="stepnum">1</span><div><b>Draw a Lewis structure</b> on paper — clear bond lines and element letters recognize best (e.g. water, CO₂, ethanol).</div></li>
+        <li><span class="stepnum">2</span><div><b>Capture it.</b>
+          <span class="platform">📱 Phone:</span> tap the <b>Camera</b> icon, aim at the paper, then tap <b>Capture</b>.
+          <span class="platform">🖥️ Desktop:</span> tap <b>Edit</b> → <b>Upload sketch</b> and choose a photo. The app recognizes the drawing and builds the 3-D molecule.</div></li>
+        <li><span class="stepnum">3</span><div><b>Explore.</b> Drag to orbit, scroll/pinch to zoom, <b>Reset view</b> to recenter. Open <b>Edit</b> to toggle <b>Atom labels</b> and <b>Show hydrogens</b>; open <b>Status</b> to see atom/bond counts. <b>Clear</b> starts over.</div></li>
+        <li><span class="stepnum">4</span><div><b>See it in AR — the molecule comes out of the paper.</b>
+          <div style="margin-top:6px">
+            <span class="platform">📱 iPhone / iPad:</span> tap the <b>AR View</b> icon (top-left, the cube). Wait for it to glow amber, tap again to open AR Quick Look, then aim at your paper and place it.<br/>
+            <span class="platform">🤖 Android:</span> tap <b>START AR</b> (top-right), aim at your paper on the desk, and tap the screen — the molecule grows out of that spot.
+          </div>
+        </div></li>
+      </ol>
+      <div class="callout">AR needs a rear camera and a secure (<code>https://</code>) page. If AR isn't available on your device, you'll still get the full interactive 3-D view.</div>
+
+      <hr />
+
+      <!-- ============================ WALKTHROUGH B ============================ -->
+      <h2 id="polymer">② Download a monomer, build a polymer, export LAMMPS</h2>
+      <p>Fetch a monomer from PubChem, tell the app which two atoms form the backbone, tile it into a chain, and download a ready-to-run LAMMPS relaxation.</p>
+
+      <figure class="scroll">
+        <svg viewBox="0 0 760 210" role="img" aria-label="Monomer to polymer diagram">
+          <text x="20" y="30" font-size="13" font-weight="700" fill="currentColor">Monomer (e.g. ethylene)</text>
+          <!-- C=C with double bond -->
+          <circle cx="60" cy="90" r="14" fill="var(--muted)"/><text x="60" y="95" text-anchor="middle" font-size="12" fill="#fff">C1</text>
+          <circle cx="140" cy="90" r="14" fill="var(--muted)"/><text x="140" y="95" text-anchor="middle" font-size="12" fill="#fff">C2</text>
+          <line x1="74" y1="84" x2="126" y2="84" class="diagram-ink" stroke-width="2.5"/>
+          <line x1="74" y1="96" x2="126" y2="96" class="diagram-ink" stroke-width="2.5"/>
+          <text x="100" y="130" text-anchor="middle" font-size="12" fill="var(--accent-2)">pick C1 &amp; C2 as anchors</text>
+          <path d="M175 90 h50" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
+          <text x="200" y="80" text-anchor="middle" font-size="11" fill="var(--muted)">double bond<tspan x="200" dy="14">opens</tspan></text>
+          <!-- repeat unit -->
+          <text x="250" y="30" font-size="13" font-weight="700" fill="currentColor">Repeat unit</text>
+          <circle cx="270" cy="90" r="12" fill="var(--muted)"/>
+          <circle cx="330" cy="90" r="12" fill="var(--muted)"/>
+          <line x1="282" y1="90" x2="318" y2="90" class="diagram-ink" stroke-width="2.5"/>
+          <line x1="258" y1="90" x2="240" y2="90" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/>
+          <line x1="342" y1="90" x2="360" y2="90" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/>
+          <path d="M375 90 h40" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
+          <!-- chain -->
+          <text x="440" y="30" font-size="13" font-weight="700" fill="currentColor">Chain × Repeats</text>
+          <g>
+            <line x1="440" y1="120" x2="740" y2="120" class="diagram-ink" stroke-width="2.5"/>
+            <circle cx="450" cy="120" r="9" fill="var(--muted)"/><circle cx="490" cy="120" r="9" fill="var(--muted)"/>
+            <circle cx="530" cy="120" r="9" fill="var(--muted)"/><circle cx="570" cy="120" r="9" fill="var(--muted)"/>
+            <circle cx="610" cy="120" r="9" fill="var(--muted)"/><circle cx="650" cy="120" r="9" fill="var(--muted)"/>
+            <circle cx="690" cy="120" r="9" fill="var(--muted)"/><circle cx="730" cy="120" r="9" fill="var(--muted)"/>
+            <line x1="470" y1="120" x2="470" y2="100" class="diagram-ink" stroke-width="2"/>
+            <line x1="550" y1="120" x2="550" y2="140" class="diagram-ink" stroke-width="2"/>
+            <line x1="630" y1="120" x2="630" y2="100" class="diagram-ink" stroke-width="2"/>
+            <line x1="710" y1="120" x2="710" y2="140" class="diagram-ink" stroke-width="2"/>
+          </g>
+          <text x="590" y="175" text-anchor="middle" font-size="12" fill="var(--muted)">side groups spiral around the backbone to avoid overlap</text>
+          <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="currentColor"/></marker></defs>
+        </svg>
+        <figcaption>Choosing the two anchor atoms opens the double bond and tiles the unit into a chain.</figcaption>
+      </figure>
+
+      <ol class="steps">
+        <li><span class="stepnum">1</span><div><b>Load a monomer.</b> Tap <b>Edit</b>, type a name or CID in the <b>PubChem</b> box (try <code>ethylene</code>, <code>styrene</code>, or <code>2244</code>), and press <b>Load</b>. The real 3-D structure appears.</div></li>
+        <li><span class="stepnum">2</span><div><b>Turn on Atom labels</b> so each atom shows its label (C1, C2, O1…). This is how you'll identify the backbone atoms.</div></li>
+        <li><span class="stepnum">3</span><div><b>Open “Make Polymer from Monomer.”</b> Choose <b>Anchor 1</b> and <b>Anchor 2</b> — the two backbone atoms (for a vinyl monomer, the two C=C carbons). Press <b>Make repeat unit</b>: the double bond opens and the unit tiles into a chain.</div></li>
+        <li><span class="stepnum">4</span><div><b>Set the chain length</b> with the <b>Repeats</b> slider.</div></li>
+        <li><span class="stepnum">5</span><div><b>Export for LAMMPS.</b> Press <b>Save LAMMPS (UFF)</b>. Two files download:
+          <div style="margin-top:6px">
+            <code>&lt;name&gt;.data</code> — atoms, bonds, and a self-contained UFF-style force field (no external force-field file needed).<br/>
+            <code>in.relax</code> — the run script.
+          </div>
+        </div></li>
+        <li><span class="stepnum">6</span><div><b>Relax it.</b> Run <code>lmp -in in.relax</code>. The script does an overlap-relief warm-up → <b>FIRE</b> energy minimization → <b>NVT at 300 K for 10 ps</b>, and writes:
+          <div style="margin-top:6px">
+            <code>&lt;name&gt;.min.xyz</code> (minimization trajectory), <code>&lt;name&gt;.nvt.xyz</code> (NVT trajectory), and <code>&lt;name&gt;.relaxed.data</code> (final structure).
+          </div>
+        </div></li>
+      </ol>
+      <div class="callout">Keep <b>Show hydrogens</b> on before saving — the export includes every hydrogen and caps the chain ends, so the polymer is a complete molecule LAMMPS can relax. The force field is generic (UFF-style, approximate) — great for getting a reasonable geometry, not for precise energetics.</div>
+
+      <hr />
+
+      <!-- ============================ TIPS ============================ -->
+      <h2 id="tips">Tips &amp; troubleshooting</h2>
+      <div class="grid2">
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">Scanning</h3>
+          <p class="muted" style="margin-top:0">Good light and dark, clear pen strokes help. Recognition is a best guess — check the <b>Status</b> panel's summary and valence note, and redraw if it's off.</p>
+        </div>
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">AR</h3>
+          <p class="muted" style="margin-top:0">Needs a rear camera and an <code>https://</code> page. iPhone/iPad use the <b>AR View</b> icon (Quick Look); Android uses <b>START AR</b> (WebXR). Grant camera permission when asked.</p>
+        </div>
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">Reset vs Clear</h3>
+          <p class="muted" style="margin-top:0"><b>Reset view</b> only recenters the camera. <b>Clear</b> removes the molecule entirely.</p>
+        </div>
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">Status panel</h3>
+          <p class="muted" style="margin-top:0">Tap the <b>Status</b> (info) icon for atom/bond counts, bond-order breakdown, and a valence check that flags unusual structures.</p>
+        </div>
+      </div>
+
+      <footer>
+        <p><a href="index.html">← Back to Polymer AR Lab</a></p>
+      </footer>
+    </div>
+  </body>
+</html>

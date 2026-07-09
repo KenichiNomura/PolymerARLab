@@ -485,6 +485,18 @@
         line-height: 1.35;
       }
 
+      .help-link {
+        justify-self: start;
+        color: #8fe3d0;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .help-link:hover {
+        text-decoration: underline;
+      }
+
       .scan-strip {
         position: fixed;
         right: max(12px, env(safe-area-inset-right));
@@ -689,6 +701,7 @@
             </div>
           </details>
           <div id="importStatus">Template library active.</div>
+          <a class="help-link" href="tutorial.html" target="_blank" rel="noopener">Tutorial &#8599;</a>
       </div>
 
       <div id="statusPanel" class="status-panel" hidden>
