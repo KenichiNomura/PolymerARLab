@@ -46,8 +46,8 @@ const appEl = document.getElementById("app")!;
 const fallbackEl = document.getElementById("fallbackMolecule")!;
 const videoEl = document.getElementById("cameraFeed") as HTMLVideoElement;
 const arEntryEl = document.getElementById("arEntry")!;
-const polymerModeToggle = document.getElementById("polymerModeToggle") as HTMLInputElement;
 const polymerSelect = document.getElementById("polymerSelect") as HTMLSelectElement;
+const makePolymerPanel = document.getElementById("makePolymerPanel") as HTMLDetailsElement;
 const exampleStructureSelect = document.getElementById("exampleStructureSelect") as HTMLSelectElement;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
@@ -84,12 +84,16 @@ let importedTemplate: PolymerTemplate | null = null;
 let currentGraph: MolecularGraph | null = null;
 let three: ThreeRuntime | null = null;
 
+// Polymer mode is entered programmatically (deriving a repeat unit or choosing a
+// polymer example), not via a user toggle.
+let polymerModeActive = false;
+
 function isPolymerMode() {
-  return polymerModeToggle.checked;
+  return polymerModeActive;
 }
 
 function setPolymerMode(on: boolean) {
-  polymerModeToggle.checked = on;
+  polymerModeActive = on;
   updateStructureModeUi();
 }
 
@@ -97,6 +101,8 @@ function updateStructureModeUi() {
   const polymerMode = isPolymerMode();
   document.body.classList.toggle("polymer-mode", polymerMode);
   repeatRange.disabled = !polymerMode;
+  // Reveal the Repeats control (now inside this panel) whenever a polymer is active.
+  if (polymerMode) makePolymerPanel.open = true;
 }
 
 function getActiveTemplate(id: string): PolymerTemplate {
@@ -525,12 +531,6 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 window.addEventListener("resize", () => {
   if (three) handleResize(three);
-});
-
-polymerModeToggle.addEventListener("change", () => {
-  updateStructureModeUi();
-  rebuildGraph();
-  showStatus(isPolymerMode() ? "Polymer repeat-unit mode active." : "Molecule mode active.");
 });
 
 polymerSelect.addEventListener("change", () => {

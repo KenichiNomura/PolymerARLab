@@ -664,20 +664,7 @@
 
           <button id="saveLammpsBtn" type="button">Save LAMMPS (UFF)</button>
 
-          <div class="toggle mode-toggle">
-            <label for="polymerModeToggle">Polymer repeat unit</label>
-            <input id="polymerModeToggle" type="checkbox" />
-          </div>
-
           <select id="polymerSelect" hidden aria-hidden="true"></select>
-
-          <div class="field polymer-only">
-            <label for="repeatRange">Repeats</label>
-            <div class="range-row">
-              <input id="repeatRange" type="range" min="1" max="12" value="4" />
-              <span id="repeatValue">4</span>
-            </div>
-          </div>
 
           <details id="makePolymerPanel" class="inline-section">
             <summary>Make Polymer from Monomer</summary>
@@ -694,6 +681,14 @@
                 </label>
               </div>
               <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
+
+              <div class="field polymer-only">
+                <label for="repeatRange">Repeats</label>
+                <div class="range-row">
+                  <input id="repeatRange" type="range" min="1" max="12" value="4" />
+                  <span id="repeatValue">4</span>
+                </div>
+              </div>
             </div>
           </details>
           <div id="importStatus">Template library active.</div>
