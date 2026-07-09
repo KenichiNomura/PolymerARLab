@@ -66,6 +66,8 @@ const pubchemLoadBtn = document.getElementById("pubchemLoadBtn") as HTMLButtonEl
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clearBtn") as HTMLButtonElement;
 const arQuickLookBtn = document.getElementById("arQuickLookBtn") as HTMLButtonElement;
+const statusToggleBtn = document.getElementById("statusToggleBtn") as HTMLButtonElement;
+const statusPanel = document.getElementById("statusPanel") as HTMLElement;
 const scanCanvas = document.getElementById("scanCanvas") as HTMLCanvasElement;
 const scanPreview = document.getElementById("scanPreview")!;
 const structureSummary = document.getElementById("structureSummary")!;
@@ -545,6 +547,12 @@ resetViewBtn.addEventListener("click", () => {
   if (three) resetView(three);
 });
 clearBtn.addEventListener("click", clearMolecule);
+statusToggleBtn.addEventListener("click", () => {
+  const open = statusPanel.hidden; // about to open
+  statusPanel.hidden = !open;
+  statusToggleBtn.classList.toggle("is-active", open);
+  statusToggleBtn.setAttribute("aria-pressed", String(open));
+});
 arQuickLookBtn.addEventListener("click", () => {
   // An active camera stream holds the camera hardware that iOS AR Quick Look
   // needs, so stop the overlay first and let the next tap launch AR with the
