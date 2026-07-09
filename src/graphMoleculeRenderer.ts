@@ -27,20 +27,20 @@ function bondColor(order: BondOrder) {
 
 function labelTexture(text: string) {
   const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 64;
+  canvas.width = 256;
+  canvas.height = 128;
   const context = canvas.getContext("2d")!;
   context.fillStyle = "rgba(13, 16, 15, 0.76)";
   context.strokeStyle = "rgba(255, 255, 255, 0.34)";
-  context.lineWidth = 2;
-  roundRect(context, 10, 10, 108, 42, 10);
+  context.lineWidth = 4;
+  roundRect(context, 20, 20, 216, 84, 20);
   context.fill();
   context.stroke();
   context.fillStyle = "#f7f3e8";
-  context.font = "600 26px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.font = "600 52px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(text, 64, 32);
+  context.fillText(text, 128, 64);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -213,8 +213,8 @@ export class GraphMoleculeRenderer {
     this.group.add(mesh);
 
     const sprite = new THREE.Sprite(this.spriteMaterial(graphAtom.element));
-    sprite.position.set(graphAtom.position[0], graphAtom.position[1] + info.radius * ATOM_SCALE + 0.24, graphAtom.position[2]);
-    sprite.scale.set(0.42, 0.21, 1);
+    sprite.position.set(graphAtom.position[0], graphAtom.position[1] + info.radius * ATOM_SCALE + 0.42, graphAtom.position[2]);
+    sprite.scale.set(0.84, 0.42, 1);
     this.labels.add(sprite);
   }
 

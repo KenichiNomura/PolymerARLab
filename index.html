@@ -209,8 +209,8 @@
       }
 
       .status-panel {
-        justify-self: start;
         width: min(360px, calc(100vw - 24px));
+        max-width: 100%;
         display: grid;
         gap: 8px;
         padding: 10px;
@@ -239,12 +239,24 @@
         font: 700 12px/1 system-ui, sans-serif !important;
       }
 
-      .control-panel {
+      /* Bottom-left dock: Edit/Status panels stack upward above the icon row,
+         which stays pinned at the bottom because the dock is anchored there. */
+      .dock {
         position: fixed;
         left: max(12px, env(safe-area-inset-left));
         bottom: max(12px, env(safe-area-inset-bottom));
         z-index: 11;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        max-width: calc(100vw - 24px);
+        pointer-events: none;
+      }
+
+      .control-panel {
         width: min(430px, calc(100vw - 24px));
+        max-width: 100%;
         display: grid;
         gap: 10px;
         padding: 12px;
@@ -253,6 +265,11 @@
         background: rgba(16, 18, 17, 0.88);
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
         backdrop-filter: blur(18px);
+        pointer-events: auto;
+      }
+
+      .control-panel[hidden] {
+        display: none;
       }
 
       .field {
@@ -540,12 +557,6 @@
           justify-content: flex-start;
         }
 
-        .control-panel {
-          right: max(12px, env(safe-area-inset-right));
-          width: auto;
-          max-width: none;
-        }
-
         .scan-strip {
           display: none;
         }
@@ -617,30 +628,15 @@
             <path d="M4.7 7.5 12 11.7l7.3-4.2M12 11.7v8.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
           </svg>
         </button>
-        <button id="statusToggleBtn" type="button" aria-label="Status" title="Status" aria-pressed="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
-            <circle cx="12" cy="8.1" r="1.05" fill="currentColor"/>
-            <path d="M12 11.2v5.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-          </svg>
-        </button>
       </div>
       <div id="arEntry"></div>
-
-      <div id="statusPanel" class="status-panel" hidden>
-        <div id="structureSummary" class="summary"></div>
-        <div id="mobileStatus"></div>
-        <div id="validationStatus"></div>
-      </div>
     </header>
 
-    <main class="control-panel" aria-label="Structure controls">
-      <details class="control-section">
-        <summary>Edit</summary>
-        <div class="section-body">
+    <div class="dock">
+      <div id="editPanel" class="control-panel" aria-label="Structure controls" hidden>
           <div class="button-row">
             <button id="uploadSketchBtn" type="button">Upload sketch</button>
-            <select id="exampleStructureSelect" aria-label="Polymer example"></select>
+            <select id="exampleStructureSelect" aria-label="Polymer Examples"></select>
           </div>
           <input id="sketchFileInput" type="file" accept="image/*" hidden />
 
@@ -700,9 +696,29 @@
             </div>
           </details>
           <div id="importStatus">Template library active.</div>
-        </div>
-      </details>
-    </main>
+      </div>
+
+      <div id="statusPanel" class="status-panel" hidden>
+        <div id="structureSummary" class="summary"></div>
+        <div id="mobileStatus"></div>
+        <div id="validationStatus"></div>
+      </div>
+
+      <div class="icon-toolbar dock-bar">
+        <button id="editToggleBtn" type="button" aria-label="Edit" title="Edit" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M14.7 6.3l3 3M4.5 16.2 15 5.7a1.6 1.6 0 0 1 2.3 0l1 1a1.6 1.6 0 0 1 0 2.3L7.8 19.5l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="statusToggleBtn" type="button" aria-label="Status" title="Status" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="12" cy="8.1" r="1.05" fill="currentColor"/>
+            <path d="M12 11.2v5.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
 
     <aside class="scan-strip" aria-label="Sketch scan">
       <div id="scanPreview"></div>

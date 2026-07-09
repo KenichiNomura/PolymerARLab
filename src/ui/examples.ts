@@ -35,7 +35,7 @@ function graphExample(value: unknown) {
 const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
   {
     id: "polyethylene",
-    label: "Polymer - polyethylene",
+    label: "polyethylene",
     kind: "import",
     format: "json",
     input: graphExample({
@@ -55,7 +55,7 @@ const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
   },
   {
     id: "pvc",
-    label: "Polymer - PVC",
+    label: "PVC",
     kind: "import",
     format: "json",
     input: graphExample({
@@ -79,7 +79,7 @@ const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
   },
   {
     id: "polyvinyl-alcohol",
-    label: "Polymer - polyvinyl alcohol",
+    label: "polyvinyl alcohol",
     kind: "import",
     format: "json",
     input: graphExample({
@@ -107,7 +107,7 @@ const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
 
 const TEMPLATE_STRUCTURE_EXAMPLES: TemplateStructureExample[] = POLYMER_TEMPLATES.map((template) => ({
   id: `template-${template.id}`,
-  label: `Polymer - ${template.name}`,
+  label: template.name,
   kind: "template",
   templateId: template.id,
   repeats: template.defaultRepeats,
@@ -119,7 +119,7 @@ export const STRUCTURE_EXAMPLES: StructureExample[] = [...IMPORT_STRUCTURE_EXAMP
 export function populateExampleSelect(select: HTMLSelectElement) {
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = "Polymer example";
+  placeholder.textContent = "Polymer Examples";
   select.appendChild(placeholder);
   for (const example of STRUCTURE_EXAMPLES) {
     const option = document.createElement("option");
