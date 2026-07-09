@@ -39,12 +39,19 @@
 
       button,
       select,
-      textarea {
+      textarea,
+      input[type="text"] {
         min-height: 36px;
         border: 1px solid rgba(247, 243, 232, 0.22);
         border-radius: 6px;
         background: rgba(247, 243, 232, 0.1);
         color: #f7f3e8;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        min-width: 0;
+        padding: 0 10px;
       }
 
       button {
@@ -604,9 +611,14 @@
         <div class="section-body">
           <div class="button-row">
             <button id="uploadSketchBtn" type="button">Upload sketch</button>
-            <select id="exampleStructureSelect" aria-label="Example structures"></select>
+            <select id="exampleStructureSelect" aria-label="Polymer example"></select>
           </div>
           <input id="sketchFileInput" type="file" accept="image/*" hidden />
+
+          <div class="import-grid">
+            <input id="pubchemInput" type="text" placeholder="PubChem name or CID" aria-label="PubChem name or CID" spellcheck="false" />
+            <button id="pubchemLoadBtn" type="button">Load</button>
+          </div>
 
           <div class="toggle">
             <input id="labelsToggle" type="checkbox" />

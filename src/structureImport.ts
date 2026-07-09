@@ -71,6 +71,56 @@ export function importStructure(
   };
 }
 
+// Build a single-molecule template straight from an SDF/molfile, keeping the
+// file's own coordinates (centered, not rescaled). Used for PubChem 3D records:
+// `is3d` sets `explicitGeometry` so the conformer/VSEPR layout is skipped and
+// the authentic coordinates render as-is; a 2D-only record leaves the flag off
+// so the conformer regenerates 3D. Deliberately avoids `withPositions`, whose
+// `normalizePositions` scales x/y but drops z and would distort real 3D.
+export function buildMoleculeTemplate3D(sdf: string, name: string, is3d: boolean): PolymerTemplate {
+  const parsed = parseMolfile(sdf);
+  validateParsedStructure(parsed);
+
+  const count = parsed.atoms.length;
+  const centroid: [number, number, number] = [0, 0, 0];
+  for (const atom of parsed.atoms) {
+    centroid[0] += (atom.x ?? 0) / count;
+    centroid[1] += (atom.y ?? 0) / count;
+    centroid[2] += (atom.z ?? 0) / count;
+  }
+  const atoms: TemplateAtom[] = parsed.atoms.map((atom) => ({
+    id: atom.id,
+    element: atom.element,
+    position: [(atom.x ?? 0) - centroid[0], (atom.y ?? 0) - centroid[1], (atom.z ?? 0) - centroid[2]],
+  }));
+  const bonds: TemplateBond[] = parsed.bonds.map((bond) => ({ id: bond.id, a: bond.a, b: bond.b, order: bond.order }));
+
+  const label = safeLabel(name, "PubChem molecule");
+  return {
+    id: IMPORTED_TEMPLATE_ID,
+    name: label,
+    shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
+    family: "PubChem",
+    repeatLabel: label,
+    defaultRepeats: 1,
+    maxRepeats: 1,
+    step: [0, 0, 0],
+    connection: { leftAtomId: atoms[0].id, rightAtomId: atoms[1].id, order: 1 },
+    explicitGeometry: is3d,
+    atoms,
+    bonds,
+    groups: [
+      {
+        id: "molecule",
+        label: label,
+        atomIds: atoms.map((atom) => atom.id),
+        bondIds: bonds.map((bond) => bond.id),
+        color: 0x44c7d8,
+      },
+    ],
+  };
+}
+
 export function updateTemplateAttachments(
   template: PolymerTemplate,
   leftAtomId: string,

@@ -1,11 +1,10 @@
-import { C60_TEMPLATE } from "../c60";
-import { POLYMER_TEMPLATES, type PolymerTemplate } from "../polymerData";
+import { POLYMER_TEMPLATES } from "../polymerData";
 import { IMPORTED_TEMPLATE_ID } from "../structureImport";
 import type { StructureImportFormat } from "../structureImport";
 
-// Curated example structures offered in the "Choose example" dropdown:
-// classroom molecules imported via SMILES, polymer repeat units via graph
-// JSON, and the built-in curated templates.
+// Curated polymer examples offered in the dropdown: repeat units via graph JSON
+// plus the built-in curated templates. (Arbitrary small molecules now come from
+// PubChem, so they are no longer hard-coded here.)
 
 export type StructureMode = "molecule" | "polymer";
 
@@ -27,70 +26,13 @@ export interface TemplateStructureExample extends BaseStructureExample {
   templateId: string;
 }
 
-// A structure that ships as a ready-built template (baked geometry), bypassing
-// the SMILES/JSON import pipeline.
-export interface PrebuiltStructureExample extends BaseStructureExample {
-  kind: "prebuilt";
-  template: PolymerTemplate;
-}
-
-export type StructureExample =
-  | ImportStructureExample
-  | TemplateStructureExample
-  | PrebuiltStructureExample;
+export type StructureExample = ImportStructureExample | TemplateStructureExample;
 
 function graphExample(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-const PREBUILT_STRUCTURE_EXAMPLES: PrebuiltStructureExample[] = [
-  {
-    id: "c60",
-    label: "Molecule - buckminsterfullerene (C60)",
-    kind: "prebuilt",
-    template: C60_TEMPLATE,
-    repeats: 1,
-    mode: "molecule",
-  },
-];
-
 const IMPORT_STRUCTURE_EXAMPLES: ImportStructureExample[] = [
-  {
-    id: "co2",
-    label: "Molecule - carbon dioxide",
-    kind: "import",
-    format: "smiles",
-    input: "O=C=O",
-    repeats: 1,
-    mode: "molecule",
-  },
-  {
-    id: "ethanol",
-    label: "Molecule - ethanol",
-    kind: "import",
-    format: "smiles",
-    input: "CCO",
-    repeats: 1,
-    mode: "molecule",
-  },
-  {
-    id: "benzene",
-    label: "Molecule - benzene",
-    kind: "import",
-    format: "smiles",
-    input: "c1ccccc1",
-    repeats: 1,
-    mode: "molecule",
-  },
-  {
-    id: "glycine",
-    label: "Molecule - glycine",
-    kind: "import",
-    format: "smiles",
-    input: "NCC(=O)O",
-    repeats: 1,
-    mode: "molecule",
-  },
   {
     id: "polyethylene",
     label: "Polymer - polyethylene",
@@ -172,16 +114,12 @@ const TEMPLATE_STRUCTURE_EXAMPLES: TemplateStructureExample[] = POLYMER_TEMPLATE
   mode: "polymer",
 }));
 
-export const STRUCTURE_EXAMPLES: StructureExample[] = [
-  ...PREBUILT_STRUCTURE_EXAMPLES,
-  ...IMPORT_STRUCTURE_EXAMPLES,
-  ...TEMPLATE_STRUCTURE_EXAMPLES,
-];
+export const STRUCTURE_EXAMPLES: StructureExample[] = [...IMPORT_STRUCTURE_EXAMPLES, ...TEMPLATE_STRUCTURE_EXAMPLES];
 
 export function populateExampleSelect(select: HTMLSelectElement) {
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = "Choose example";
+  placeholder.textContent = "Polymer example";
   select.appendChild(placeholder);
   for (const example of STRUCTURE_EXAMPLES) {
     const option = document.createElement("option");

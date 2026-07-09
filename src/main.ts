@@ -1,4 +1,5 @@
 import { aiAccessToken, aiRecognitionEndpoint } from "./aiRecognition";
+import { C60_TEMPLATE } from "./c60";
 import { createCameraOverlay } from "./cameraOverlay";
 import { conformerResourcesReady, preloadConformerResources, templateTo3D } from "./conformer3d";
 import { renderFallbackGraph } from "./fallback2d";
@@ -12,6 +13,7 @@ import {
   type PolymerTemplate,
   type TemplateAtom,
 } from "./polymerData";
+import { fetchCompound, resolveCid } from "./pubchem";
 import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./rdkitService";
 import { runSketchRecognition, type ImportOutcome } from "./recognitionFlow";
 import { createQuickLook } from "./scene/quickLook";
@@ -24,7 +26,13 @@ import {
   type ThreeRuntime,
 } from "./scene/threeScene";
 import { installWebXR } from "./scene/webxr";
-import { IMPORTED_TEMPLATE_ID, importStructure, updateTemplateAttachments, type StructureImportFormat } from "./structureImport";
+import {
+  IMPORTED_TEMPLATE_ID,
+  buildMoleculeTemplate3D,
+  importStructure,
+  updateTemplateAttachments,
+  type StructureImportFormat,
+} from "./structureImport";
 import { STRUCTURE_EXAMPLES, populateExampleSelect, populateTemplateSelect } from "./ui/examples";
 import { showImportStatus, showPlatformStatus, showScanStatus, showStatus } from "./ui/status";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
@@ -53,6 +61,8 @@ const cameraModeBtn = document.getElementById("cameraModeBtn") as HTMLButtonElem
 const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
 const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
+const pubchemInput = document.getElementById("pubchemInput") as HTMLInputElement;
+const pubchemLoadBtn = document.getElementById("pubchemLoadBtn") as HTMLButtonElement;
 const resetViewBtn = document.getElementById("resetViewBtn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clearBtn") as HTMLButtonElement;
 const arQuickLookBtn = document.getElementById("arQuickLookBtn") as HTMLButtonElement;
@@ -271,22 +281,24 @@ async function normalizeWithChemistryFallback(
   }
 }
 
+// Load a ready-built molecule template (baked geometry, e.g. C60 or a PubChem
+// download) into the single "imported" slot and render it as a molecule.
+function showImportedTemplate(template: PolymerTemplate, statusMessage: string) {
+  setPolymerMode(false);
+  importedTemplate = template;
+  importedTemplateOption.hidden = false;
+  importedTemplateOption.textContent = `${template.shortName} - ${template.name}`;
+  polymerSelect.value = IMPORTED_TEMPLATE_ID;
+  exampleStructureSelect.value = "";
+  repeatRange.value = "1";
+  rebuildGraph();
+  showStatus(statusMessage);
+}
+
 async function useSelectedExample() {
   const example = STRUCTURE_EXAMPLES.find((candidate) => candidate.id === exampleStructureSelect.value);
   if (!example) return;
   setPolymerMode(example.mode === "polymer");
-  if (example.kind === "prebuilt") {
-    // A ready-built template with baked geometry occupies the "imported" slot.
-    importedTemplate = example.template;
-    importedTemplateOption.hidden = false;
-    importedTemplateOption.textContent = `${example.template.shortName} - ${example.template.name}`;
-    polymerSelect.value = IMPORTED_TEMPLATE_ID;
-    repeatRange.value = "1";
-    rebuildGraph();
-    showImportStatus(`Loaded example: ${example.label}.`);
-    showStatus(`Verification target: ${example.template.shortName}.`);
-    return;
-  }
   if (example.kind === "template") {
     const template = getTemplate(example.templateId);
     polymerSelect.value = template.id;
@@ -301,6 +313,35 @@ async function useSelectedExample() {
   structureInput.value = example.input;
   showImportStatus(`Loading example: ${example.label}.`);
   await loadImportedStructure({ repeatOverride: example.repeats });
+}
+
+// Fetch a molecule from PubChem by CID or name and render it with PubChem's own
+// 3D coordinates (see buildMoleculeTemplate3D / explicitGeometry).
+async function loadFromPubChem() {
+  const query = pubchemInput.value.trim();
+  if (!query) {
+    showImportStatus("Enter a PubChem name or CID.");
+    return;
+  }
+  pubchemLoadBtn.disabled = true;
+  showImportStatus(`Looking up "${query}" on PubChem...`);
+  try {
+    const cid = await resolveCid(query);
+    const { sdf, is3d, title } = await fetchCompound(cid);
+    const template = buildMoleculeTemplate3D(sdf, title, is3d);
+    showImportedTemplate(template, `Loaded PubChem CID ${cid}: ${title}.`);
+    showImportStatus(
+      `PubChem CID ${cid}: ${title} - ${template.atoms.length} atoms, ${template.bonds.length} bonds${
+        is3d ? "." : " (2D record; generated 3D)."
+      }`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showImportStatus(message);
+    showStatus(`PubChem load failed: ${message}`, true);
+  } finally {
+    pubchemLoadBtn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +504,15 @@ polymerSelect.addEventListener("change", () => {
 exampleStructureSelect.addEventListener("change", () => {
   void useSelectedExample();
 });
+pubchemLoadBtn.addEventListener("click", () => {
+  void loadFromPubChem();
+});
+pubchemInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadFromPubChem();
+  }
+});
 loadStructureBtn.addEventListener("click", () => {
   void loadImportedStructure();
 });
@@ -526,9 +576,8 @@ three = initThreeRuntime(appEl, (message) => {
 
 updateStructureModeUi();
 // Show C60 by default (baked geometry — needs neither RDKit nor conformer
-// resources, so it renders immediately on boot).
-exampleStructureSelect.value = "c60";
-void useSelectedExample();
+// resources nor a network call, so it renders immediately on boot).
+showImportedTemplate(C60_TEMPLATE, `Verification target: ${C60_TEMPLATE.shortName}.`);
 
 if (three) {
   document.body.classList.add("webgl-ready");
