@@ -19,13 +19,25 @@ export function installWebXR(runtime: ThreeRuntime, arEntryEl: HTMLElement, hook
   button.id = "webxrArButton";
   arEntryEl.replaceChildren(button);
 
+  let placedOnce = false;
   const controller = runtime.renderer.xr.getController(0);
   controller.addEventListener("select", () => {
     if (!runtime.reticle.visible) return;
     runtime.moleculeRoot.visible = true;
     runtime.moleculeRoot.position.setFromMatrixPosition(runtime.reticle.matrix);
     runtime.moleculeRoot.quaternion.setFromRotationMatrix(runtime.reticle.matrix);
-    runtime.moleculeRoot.scale.setScalar(0.18);
+    // Grow the molecule out of the tapped spot instead of snapping full-size.
+    runtime.moleculeRoot.scale.setScalar(0.0001);
+    runtime.arPlacement = {
+      startMs: performance.now(),
+      durationMs: 700,
+      targetScale: 0.18,
+      seatY: runtime.moleculeRoot.position.y,
+    };
+    if (!placedOnce) {
+      placedOnce = true;
+      showStatus("Tap again anywhere to move it.");
+    }
   });
   runtime.scene.add(controller);
 
@@ -34,7 +46,7 @@ export function installWebXR(runtime: ThreeRuntime, arEntryEl: HTMLElement, hook
     runtime.controls.enabled = false;
     setBackgroundVisible(runtime, false);
     runtime.moleculeRoot.visible = false;
-    showStatus("Move the phone to find a surface, then tap to place the structure.");
+    showStatus("Aim at your Lewis-structure paper on the desk, then tap to grow the molecule out of it.");
 
     const session = runtime.renderer.xr.getSession();
     if (!session) return;
@@ -51,6 +63,7 @@ export function installWebXR(runtime: ThreeRuntime, arEntryEl: HTMLElement, hook
     runtime.arHitTestSource?.cancel?.();
     runtime.arHitTestSource = null;
     runtime.arLocalSpace = null;
+    runtime.arPlacement = null;
     runtime.reticle.visible = false;
     runtime.controls.enabled = true;
     setBackgroundVisible(runtime, true);

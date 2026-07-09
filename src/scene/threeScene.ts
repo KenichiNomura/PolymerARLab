@@ -16,6 +16,15 @@ export interface ThreeRuntime {
   grid: THREE.GridHelper;
   arHitTestSource: XRHitTestSource | null;
   arLocalSpace: XRReferenceSpace | null;
+  // Active "grow out of the paper" tween after a WebXR tap-to-place; null when idle.
+  arPlacement: ArPlacement | null;
+}
+
+export interface ArPlacement {
+  startMs: number;
+  durationMs: number;
+  targetScale: number;
+  seatY: number;
 }
 
 const BACKGROUND_COLOR = 0x101211;
@@ -82,6 +91,7 @@ export function initThreeRuntime(container: HTMLElement, onFailure: (message: st
       grid,
       arHitTestSource: null,
       arLocalSpace: null,
+      arPlacement: null,
     };
   } catch (error) {
     console.error(error);
@@ -111,12 +121,32 @@ export function startRenderLoop(runtime: ThreeRuntime) {
       }
     }
 
-    if (!runtime.renderer.xr.isPresenting) {
+    if (runtime.renderer.xr.isPresenting) {
+      applyPlacementAnimation(runtime, performance.now());
+    } else {
       runtime.moleculeRoot.rotation.y += 0.0015;
     }
 
     runtime.renderer.render(runtime.scene, runtime.camera);
   });
+}
+
+// Eased 0..1 progress of the placement tween (ease-out cubic).
+export function placementProgress(startMs: number, durationMs: number, now: number): number {
+  const t = Math.min(1, Math.max(0, (now - startMs) / durationMs));
+  return 1 - Math.pow(1 - t, 3);
+}
+
+// Grows the just-placed molecule out of the tapped surface: scale 0 -> target
+// while lifting the last bit up off the page. Clears the tween when complete.
+export function applyPlacementAnimation(runtime: ThreeRuntime, now: number) {
+  const placement = runtime.arPlacement;
+  if (!placement) return;
+  const e = placementProgress(placement.startMs, placement.durationMs, now);
+  runtime.moleculeRoot.scale.setScalar(Math.max(0.0001, placement.targetScale * e));
+  // Start slightly sunk into the surface and rise to the seated height.
+  runtime.moleculeRoot.position.y = placement.seatY - (1 - e) * 0.03;
+  if (e >= 1) runtime.arPlacement = null;
 }
 
 // Places the molecule at the desktop/phone preview pose. Skipped while an
