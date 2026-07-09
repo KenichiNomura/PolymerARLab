@@ -277,11 +277,52 @@ function alignToConnection(
     return [dotVec(relative, u1), dotVec(relative, u2), dotVec(relative, u3)];
   };
 
+  const alignedPositions = positions.map(transform);
+  const alignedHydrogens = hydrogens.map((hydrogen) => ({ ...hydrogen, position: transform(hydrogen.position) }));
+  const allPoints = [...alignedPositions, ...alignedHydrogens.map((hydrogen) => hydrogen.position)];
+
   return {
-    positions: positions.map(transform),
-    hydrogens: hydrogens.map((hydrogen) => ({ ...hydrogen, position: transform(hydrogen.position) })),
-    stepX: axisLength + REPEAT_LINK_BOND,
+    positions: alignedPositions,
+    hydrogens: alignedHydrogens,
+    stepX: clashFreeStepX(allPoints, axisLength, leftIndex, rightIndex),
   };
+}
+
+// Widen the per-unit translation so neighbouring repeat units do not overlap.
+// Starts from the ideal (attachment span + one link bond) and grows only as much
+// as needed, so slim backbones (e.g. polyethylene) stay tight while bulky
+// side-groups get room. Consecutive units alternate the syndiotactic y/z flip
+// (see orientSyndiotacticSideGroup), so both orderings are checked.
+const MIN_INTERUNIT_CONTACT = 1.15; // Å; closest allowed non-bonded approach between units (mild residual is relieved by the LAMMPS warm-up)
+const STEP_INCREMENT = 0.1;
+
+function clashFreeStepX(points: Vec3[], axisLength: number, leftIndex: number, rightIndex: number): number {
+  const base = axisLength + REPEAT_LINK_BOND;
+  const flipped = points.map((p): Vec3 => [p[0], -p[1], -p[2]]);
+  const min2 = MIN_INTERUNIT_CONTACT * MIN_INTERUNIT_CONTACT;
+
+  const clashes = (stepX: number): boolean => {
+    for (const [a, b] of [
+      [points, flipped],
+      [flipped, points],
+    ] as const) {
+      for (let i = 0; i < a.length; i++) {
+        for (let j = 0; j < b.length; j++) {
+          if (i === rightIndex && j === leftIndex) continue; // the inter-unit link bond itself
+          const dx = a[i][0] - (b[j][0] + stepX);
+          const dy = a[i][1] - b[j][1];
+          const dz = a[i][2] - b[j][2];
+          if (dx * dx + dy * dy + dz * dz < min2) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  let stepX = base;
+  const cap = base + 15;
+  while (stepX < cap && clashes(stepX)) stepX += STEP_INCREMENT;
+  return stepX;
 }
 
 function centerPositions(positions: Vec3[]): Vec3[] {
