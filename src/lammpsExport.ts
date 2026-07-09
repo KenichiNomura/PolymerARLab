@@ -304,6 +304,7 @@ export function buildUFFInput(elements: AtomSymbol[], name: string, counts: Lamm
     "",
     "units           real",
     "atom_style      full",
+    "atom_modify     sort 0 0.0     # disable atom sorting (a cache optimization); avoids 'Too many atom sorting bins' in a large vacuum box",
     "boundary        s s s          # finite molecule (shrink-wrapped); use 'p p p' for a periodic cell",
     "",
     "pair_style      lj/cut 10.0",
