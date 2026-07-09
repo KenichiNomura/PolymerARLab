@@ -677,36 +677,10 @@
             </div>
           </div>
 
-          <details id="structureImportPanel" class="inline-section">
-            <summary>Import custom structure</summary>
-            <div class="inline-section-body">
-              <div class="import-grid">
-                <select id="structureFormat" aria-label="Structure format">
-                  <option value="auto">Auto format</option>
-                  <option value="smiles">SMILES</option>
-                  <option value="molfile">Molfile</option>
-                  <option value="json">Graph JSON</option>
-                </select>
-                <button id="loadStructureBtn" type="button">Import</button>
-              </div>
-              <textarea id="structureInput" rows="4" spellcheck="false" placeholder="SMILES, Molfile, or graph JSON"></textarea>
-              <div class="attachment-grid polymer-only">
-                <label for="leftAttachmentSelect">
-                  Start atom
-                  <select id="leftAttachmentSelect" disabled></select>
-                </label>
-                <label for="rightAttachmentSelect">
-                  End atom
-                  <select id="rightAttachmentSelect" disabled></select>
-                </label>
-              </div>
-            </div>
-          </details>
-
           <details id="makePolymerPanel" class="inline-section">
-            <summary>Make polymer from molecule</summary>
+            <summary>Make Polymer from Monomer</summary>
             <div class="inline-section-body">
-              <p class="hint">Pick the two backbone atoms (e.g. the C=C of a vinyl monomer); the double bond opens and the unit tiles into a chain.</p>
+              <p class="hint">Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.</p>
               <div class="attachment-grid">
                 <label for="anchorASelect">
                   Anchor 1

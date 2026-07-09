@@ -6,12 +6,12 @@ import { renderFallbackGraph } from "./fallback2d";
 import { isIOSDevice } from "./platform";
 import {
   POLYMER_TEMPLATES,
+  elementLabels,
   generatePolymerGraph,
   getTemplate,
   summarizeBondOrders,
   type MolecularGraph,
   type PolymerTemplate,
-  type TemplateAtom,
 } from "./polymerData";
 import { fetchCompound, resolveCid } from "./pubchem";
 import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./rdkitService";
@@ -31,7 +31,6 @@ import {
   buildMoleculeTemplate3D,
   deriveRepeatUnit,
   importStructure,
-  updateTemplateAttachments,
   type StructureImportFormat,
 } from "./structureImport";
 import { STRUCTURE_EXAMPLES, populateExampleSelect, populateTemplateSelect } from "./ui/examples";
@@ -49,11 +48,6 @@ const arEntryEl = document.getElementById("arEntry")!;
 const polymerModeToggle = document.getElementById("polymerModeToggle") as HTMLInputElement;
 const polymerSelect = document.getElementById("polymerSelect") as HTMLSelectElement;
 const exampleStructureSelect = document.getElementById("exampleStructureSelect") as HTMLSelectElement;
-const structureFormat = document.getElementById("structureFormat") as HTMLSelectElement;
-const structureInput = document.getElementById("structureInput") as HTMLTextAreaElement;
-const loadStructureBtn = document.getElementById("loadStructureBtn") as HTMLButtonElement;
-const leftAttachmentSelect = document.getElementById("leftAttachmentSelect") as HTMLSelectElement;
-const rightAttachmentSelect = document.getElementById("rightAttachmentSelect") as HTMLSelectElement;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
@@ -101,7 +95,6 @@ function updateStructureModeUi() {
   const polymerMode = isPolymerMode();
   document.body.classList.toggle("polymer-mode", polymerMode);
   repeatRange.disabled = !polymerMode;
-  updateAttachmentControls();
 }
 
 function getActiveTemplate(id: string): PolymerTemplate {
@@ -167,7 +160,6 @@ function rebuildGraph() {
   updateSummary();
   updateThreeGraph();
   renderFallbackGraph(fallbackEl, currentGraph, currentTemplate.name, Boolean(three));
-  updateAttachmentControls();
 }
 
 // Empties the display. Any later structure action (choose example, scan,
@@ -219,21 +211,17 @@ function updateSummary() {
 
 const importedTemplateOption = populateTemplateSelect(polymerSelect);
 
-async function loadImportedStructure(options: { repeatOverride?: number } = {}): Promise<ImportOutcome> {
-  loadStructureBtn.disabled = true;
+// Internal import used by the curated examples and the sketch recognizer (the
+// user-facing paste panel was removed). Attachment atoms come from the graph
+// JSON itself, so no manual attachment override is passed.
+async function loadImportedStructure(
+  input: string,
+  format: StructureImportFormat,
+  options: { repeatOverride?: number } = {},
+): Promise<ImportOutcome> {
   try {
-    const requestedFormat = structureFormat.value as StructureImportFormat;
-    const normalized = await normalizeWithChemistryFallback(structureInput.value, requestedFormat);
-    const result = importStructure(
-      normalized.input,
-      normalized.format,
-      isPolymerMode()
-        ? {
-            leftAtomId: leftAttachmentSelect.value,
-            rightAtomId: rightAttachmentSelect.value,
-          }
-        : {},
-    );
+    const normalized = await normalizeWithChemistryFallback(input, format);
+    const result = importStructure(normalized.input, normalized.format, {});
     importedTemplate =
       options.repeatOverride == null
         ? result.template
@@ -243,6 +231,7 @@ async function loadImportedStructure(options: { repeatOverride?: number } = {}):
     polymerSelect.value = IMPORTED_TEMPLATE_ID;
     repeatRange.value = String(importedTemplate.defaultRepeats);
     rebuildGraph();
+    populateAnchorControls(importedTemplate);
     const [importedMessage, ...importWarnings] = result.messages;
     const countsMessage = `${importedMessage} ${importedTemplate.atoms.length} atoms, ${importedTemplate.bonds.length} bonds.`;
     showImportStatus([...normalized.messages, countsMessage, ...importWarnings].join(" "));
@@ -253,8 +242,6 @@ async function loadImportedStructure(options: { repeatOverride?: number } = {}):
     showImportStatus(message);
     showStatus(`Import failed: ${message}`, true);
     return { ok: false, message };
-  } finally {
-    loadStructureBtn.disabled = false;
   }
 }
 
@@ -304,9 +291,11 @@ function showImportedTemplate(template: PolymerTemplate, statusMessage: string) 
   showStatus(statusMessage);
 }
 
-// Fill the "Make polymer" anchor selects from a molecule's heavy atoms, and
-// pre-select the atoms of its first double/triple bond (the vinyl-monomer case).
+// Fill the "Make Polymer from Monomer" anchor selects from a molecule's heavy
+// atoms, labelled with the same per-element index shown in the 3D view (C1, C2,
+// O1, ...), and pre-select the first double/triple bond (the vinyl case).
 function populateAnchorControls(template: PolymerTemplate) {
+  const labels = elementLabels(template.atoms);
   const heavy = template.atoms.filter((atom) => atom.element !== "H");
   anchorASelect.replaceChildren();
   anchorBSelect.replaceChildren();
@@ -317,8 +306,9 @@ function populateAnchorControls(template: PolymerTemplate) {
   if (!usable) return;
 
   for (const atom of heavy) {
-    anchorASelect.appendChild(attachmentOption(atom));
-    anchorBSelect.appendChild(attachmentOption(atom));
+    const label = labels.get(atom.id) ?? atom.element;
+    anchorASelect.appendChild(anchorOption(atom.id, label));
+    anchorBSelect.appendChild(anchorOption(atom.id, label));
   }
 
   const multiBond = template.bonds.find(
@@ -326,6 +316,13 @@ function populateAnchorControls(template: PolymerTemplate) {
   );
   anchorASelect.value = multiBond ? multiBond.a : heavy[0].id;
   anchorBSelect.value = multiBond ? multiBond.b : heavy[1].id;
+}
+
+function anchorOption(atomId: string, label: string) {
+  const option = document.createElement("option");
+  option.value = atomId;
+  option.textContent = label;
+  return option;
 }
 
 function makeRepeatUnit() {
@@ -366,10 +363,8 @@ async function useSelectedExample() {
     return;
   }
 
-  structureFormat.value = example.format;
-  structureInput.value = example.input;
   showImportStatus(`Loading example: ${example.label}.`);
-  await loadImportedStructure({ repeatOverride: example.repeats });
+  await loadImportedStructure(example.input, example.format, { repeatOverride: example.repeats });
 }
 
 // Fetch a molecule from PubChem by CID or name and render it with PubChem's own
@@ -402,53 +397,6 @@ async function loadFromPubChem() {
 }
 
 // ---------------------------------------------------------------------------
-// Attachment controls (polymer repeat-unit connection points)
-// ---------------------------------------------------------------------------
-
-function applyImportedAttachments() {
-  if (!isPolymerMode() || !importedTemplate || polymerSelect.value !== IMPORTED_TEMPLATE_ID) return;
-  try {
-    importedTemplate = updateTemplateAttachments(importedTemplate, leftAttachmentSelect.value, rightAttachmentSelect.value);
-    importedTemplateOption.textContent = `${importedTemplate.shortName} - ${importedTemplate.name}`;
-    rebuildGraph();
-    showImportStatus(`Connections: ${importedTemplate.connection.leftAtomId} -> ${importedTemplate.connection.rightAtomId}.`);
-    showStatus("Updated repeat-unit attachment atoms.");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    showImportStatus(message);
-    showStatus(message, true);
-  }
-}
-
-function updateAttachmentControls() {
-  const template = isPolymerMode() && polymerSelect.value === IMPORTED_TEMPLATE_ID ? importedTemplate : null;
-  leftAttachmentSelect.replaceChildren();
-  rightAttachmentSelect.replaceChildren();
-
-  if (!template) {
-    leftAttachmentSelect.disabled = true;
-    rightAttachmentSelect.disabled = true;
-    return;
-  }
-
-  for (const atom of template.atoms) {
-    leftAttachmentSelect.appendChild(attachmentOption(atom));
-    rightAttachmentSelect.appendChild(attachmentOption(atom));
-  }
-  leftAttachmentSelect.value = template.connection.leftAtomId;
-  rightAttachmentSelect.value = template.connection.rightAtomId;
-  leftAttachmentSelect.disabled = false;
-  rightAttachmentSelect.disabled = false;
-}
-
-function attachmentOption(atom: TemplateAtom) {
-  const option = document.createElement("option");
-  option.value = atom.id;
-  option.textContent = `${atom.id} (${atom.element})`;
-  return option;
-}
-
-// ---------------------------------------------------------------------------
 // Scan capture (camera frame or uploaded image -> recognition)
 // ---------------------------------------------------------------------------
 
@@ -460,10 +408,6 @@ function updateScanPreview() {
 const recognitionOptions = {
   canvas: scanCanvas,
   setPolymerMode,
-  setImportInput: (format: StructureImportFormat, value: string) => {
-    structureFormat.value = format;
-    structureInput.value = value;
-  },
   importStructure: loadImportedStructure,
 };
 
@@ -570,11 +514,6 @@ pubchemInput.addEventListener("keydown", (event) => {
     void loadFromPubChem();
   }
 });
-loadStructureBtn.addEventListener("click", () => {
-  void loadImportedStructure();
-});
-leftAttachmentSelect.addEventListener("change", applyImportedAttachments);
-rightAttachmentSelect.addEventListener("change", applyImportedAttachments);
 makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
 repeatRange.addEventListener("input", rebuildGraph);
 

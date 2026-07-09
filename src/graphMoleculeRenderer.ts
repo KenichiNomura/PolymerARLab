@@ -212,7 +212,7 @@ export class GraphMoleculeRenderer {
     mesh.userData.atom = graphAtom;
     this.group.add(mesh);
 
-    const sprite = new THREE.Sprite(this.spriteMaterial(graphAtom.element));
+    const sprite = new THREE.Sprite(this.spriteMaterial(graphAtom.label));
     sprite.position.set(graphAtom.position[0], graphAtom.position[1] + info.radius * ATOM_SCALE + 0.42, graphAtom.position[2]);
     sprite.scale.set(0.84, 0.42, 1);
     this.labels.add(sprite);

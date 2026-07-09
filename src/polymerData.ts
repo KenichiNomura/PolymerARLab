@@ -320,12 +320,27 @@ function bondOrderValue(order: BondOrder): number {
   return order === "aromatic" ? 1.5 : order;
 }
 
+// Per-element index labels for a set of atoms in order: C1, C2, O1, H1, H2, ...
+// Shared by the 3D atom labels and the "Make Polymer from Monomer" anchor picker
+// so users can match what they see to what they select.
+export function elementLabels(atoms: Array<{ id: string; element: AtomSymbol }>): Map<string, string> {
+  const counts = new Map<AtomSymbol, number>();
+  const labels = new Map<string, string>();
+  for (const atom of atoms) {
+    const next = (counts.get(atom.element) ?? 0) + 1;
+    counts.set(atom.element, next);
+    labels.set(atom.id, `${atom.element}${next}`);
+  }
+  return labels;
+}
+
 export function generatePolymerGraph(template: PolymerTemplate, repeatCount: number): MolecularGraph {
   const safeRepeats = Math.min(template.maxRepeats, Math.max(1, Math.round(repeatCount)));
   const atoms: GraphAtom[] = [];
   const bonds: GraphBond[] = [];
   const groups: GraphGroup[] = [];
   const atomByTemplateAndUnit = new Map<string, GraphAtom>();
+  const labels = elementLabels(template.atoms);
 
   for (let unit = 0; unit < safeRepeats; unit++) {
     const unitBase = scaleVec(template.step, unit);
@@ -340,7 +355,7 @@ export function generatePolymerGraph(template: PolymerTemplate, repeatCount: num
         element: templateAtom.element,
         position,
         unit,
-        label: templateAtom.label ?? templateAtom.element,
+        label: labels.get(templateAtom.id) ?? templateAtom.element,
       };
       atomByTemplateAndUnit.set(id, graphAtom);
       atoms.push(graphAtom);

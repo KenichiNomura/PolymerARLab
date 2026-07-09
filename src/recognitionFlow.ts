@@ -16,8 +16,7 @@ export interface ImportOutcome {
 export interface RecognitionFlowOptions {
   canvas: HTMLCanvasElement;
   setPolymerMode: (on: boolean) => void;
-  setImportInput: (format: StructureImportFormat, value: string) => void;
-  importStructure: (options?: { repeatOverride?: number }) => Promise<ImportOutcome>;
+  importStructure: (input: string, format: StructureImportFormat, options?: { repeatOverride?: number }) => Promise<ImportOutcome>;
 }
 
 export async function runSketchRecognition(source: RecognitionSource, options: RecognitionFlowOptions) {
@@ -27,9 +26,8 @@ export async function runSketchRecognition(source: RecognitionSource, options: R
     try {
       const ai = await recognizeSketchWithAI(options.canvas, endpoint);
       options.setPolymerMode(ai.isRepeatUnit);
-      options.setImportInput("smiles", ai.smiles);
       const repeatOverride = ai.isRepeatUnit && ai.repeatCount > 0 ? ai.repeatCount : undefined;
-      const outcome = await options.importStructure({ repeatOverride });
+      const outcome = await options.importStructure(ai.smiles, "smiles", { repeatOverride });
       if (!outcome.ok) throw new Error(`the recognized SMILES "${ai.smiles}" did not import (${outcome.message})`);
       const notes = ai.notes.length > 0 ? ` ${ai.notes.join(" ")}` : "";
       showScanStatus(`AI recognition: ${ai.smiles} (confidence ${(ai.confidence * 100).toFixed(0)}%).${notes}`, ai.notes.length > 0);
@@ -44,8 +42,7 @@ export async function runSketchRecognition(source: RecognitionSource, options: R
   try {
     const recognized = await recognizeSketch(options.canvas, source);
     options.setPolymerMode(recognized.polymer?.isRepeatUnit ?? false);
-    options.setImportInput("json", recognizedStructureToImportJson(recognized));
-    await options.importStructure();
+    await options.importStructure(recognizedStructureToImportJson(recognized), "json");
     const confidence = `Recognition confidence ${(recognized.confidence * 100).toFixed(0)}%.`;
     showScanStatus([confidence, ...recognized.warnings].join(" "), recognized.warnings.length > 0);
   } catch (error) {

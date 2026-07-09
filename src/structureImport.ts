@@ -186,28 +186,6 @@ export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, a
   };
 }
 
-export function updateTemplateAttachments(
-  template: PolymerTemplate,
-  leftAtomId: string,
-  rightAtomId: string,
-): PolymerTemplate {
-  if (leftAtomId === rightAtomId) {
-    throw new Error("Choose two different attachment atoms.");
-  }
-  const atomIds = new Set(template.atoms.map((atom) => atom.id));
-  if (!atomIds.has(leftAtomId) || !atomIds.has(rightAtomId)) {
-    throw new Error("Attachment atom is not part of the imported repeat unit.");
-  }
-  return {
-    ...template,
-    connection: {
-      ...template.connection,
-      leftAtomId,
-      rightAtomId,
-    },
-  };
-}
-
 function detectFormat(source: string, format: StructureImportFormat): Exclude<StructureImportFormat, "auto"> {
   if (format !== "auto") return format;
   if (source.startsWith("{") || source.startsWith("[")) return "json";
