@@ -219,8 +219,10 @@
         left: max(12px, env(safe-area-inset-left));
         bottom: max(12px, env(safe-area-inset-bottom));
         z-index: 11;
-        width: min(430px, calc(100vw - 24px));
+        width: min(520px, calc(100vw - 24px));
         display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
         gap: 10px;
         padding: 12px;
         border: 1px solid rgba(247, 243, 232, 0.16);
@@ -539,7 +541,8 @@
 
         .import-grid,
         .import-actions,
-        .attachment-grid {
+        .attachment-grid,
+        .button-row {
           grid-template-columns: 1fr;
         }
 
@@ -562,7 +565,7 @@
 
     <header class="topbar">
       <div class="icon-toolbar">
-        <button id="cameraModeBtn" type="button" aria-label="Camera AR" title="Camera AR" aria-pressed="false">
+        <button id="cameraModeBtn" type="button" aria-label="Camera" title="Camera" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h1.7l1-1.6a1 1 0 0 1 .85-.47h5.9a1 1 0 0 1 .85.47l1 1.6h1.7A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
             <circle cx="12" cy="12.4" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/>
@@ -585,7 +588,7 @@
             <path d="M6 7h12M9.5 7V5.6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M8 7l.7 11a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <button id="arQuickLookBtn" type="button" aria-label="AR Quick Look" title="AR Quick Look">
+        <button id="arQuickLookBtn" type="button" aria-label="AR View" title="AR View">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M12 3.2 19.5 7.4v9.2L12 20.8 4.5 16.6V7.4L12 3.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
             <path d="M4.7 7.5 12 11.7l7.3-4.2M12 11.7v8.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>

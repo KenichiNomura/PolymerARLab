@@ -58,7 +58,7 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
     if (runtime) setBackgroundVisible(runtime, true);
     options.toggleButton.classList.remove("is-active");
     options.toggleButton.setAttribute("aria-pressed", "false");
-    options.toggleButton.title = "Camera AR";
+    options.toggleButton.title = "Camera";
     options.captureButton.disabled = true;
   }
 

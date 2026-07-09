@@ -19,8 +19,8 @@ export interface QuickLookOptions {
 
 // The button is an icon; its readiness shows as a tooltip + accent class
 // rather than swapped text (which would erase the SVG).
-const IDLE_LABEL = "AR Quick Look";
-const READY_LABEL = "Open AR view";
+const IDLE_LABEL = "AR View";
+const READY_LABEL = "AR View";
 const PREPARE_DEBOUNCE_MS = 400;
 
 export function createQuickLook(options: QuickLookOptions) {
