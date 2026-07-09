@@ -433,6 +433,13 @@
         padding: 0 10px 10px;
       }
 
+      .hint {
+        margin: 0;
+        color: rgba(247, 243, 232, 0.66);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
       body:not(.polymer-mode) .polymer-only {
         display: none;
       }
@@ -693,6 +700,24 @@
                   <select id="rightAttachmentSelect" disabled></select>
                 </label>
               </div>
+            </div>
+          </details>
+
+          <details id="makePolymerPanel" class="inline-section">
+            <summary>Make polymer from molecule</summary>
+            <div class="inline-section-body">
+              <p class="hint">Pick the two backbone atoms (e.g. the C=C of a vinyl monomer); the double bond opens and the unit tiles into a chain.</p>
+              <div class="attachment-grid">
+                <label for="anchorASelect">
+                  Anchor 1
+                  <select id="anchorASelect" disabled></select>
+                </label>
+                <label for="anchorBSelect">
+                  Anchor 2
+                  <select id="anchorBSelect" disabled></select>
+                </label>
+              </div>
+              <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
             </div>
           </details>
           <div id="importStatus">Template library active.</div>

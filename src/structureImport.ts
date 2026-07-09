@@ -121,6 +121,71 @@ export function buildMoleculeTemplate3D(sdf: string, name: string, is3d: boolean
   };
 }
 
+// Turn a loaded monomer into a tileable repeat unit given two backbone anchor
+// atoms. Strips hydrogens (the conformer re-adds them and drops the two
+// chain-axis ones) and, for a vinyl monomer, opens the C=C by reducing the
+// anchor-anchor bond order — so the addition-polymer backbone is single-bonded.
+// Returns a molecule-less template (explicitGeometry off) for the conformer
+// polymer path to lay out and align.
+export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, anchorBId: string): PolymerTemplate {
+  if (anchorAId === anchorBId) throw new Error("Pick two different anchor atoms.");
+  const byId = new Map(molecule.atoms.map((atom) => [atom.id, atom]));
+  const anchorA = byId.get(anchorAId);
+  const anchorB = byId.get(anchorBId);
+  if (!anchorA || !anchorB) throw new Error("Anchor atom is not part of this molecule.");
+  if (anchorA.element === "H" || anchorB.element === "H") throw new Error("Anchor atoms must be heavy atoms, not hydrogen.");
+
+  // Drop hydrogens and any bond touching one.
+  const heavyIds = new Set(molecule.atoms.filter((atom) => atom.element !== "H").map((atom) => atom.id));
+  const atoms: TemplateAtom[] = molecule.atoms
+    .filter((atom) => heavyIds.has(atom.id))
+    .map((atom) => ({ id: atom.id, element: atom.element, position: [...atom.position] as [number, number, number] }));
+  const bonds: TemplateBond[] = molecule.bonds
+    .filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b))
+    .map((bond) => ({ id: bond.id, a: bond.a, b: bond.b, order: bond.order }));
+
+  if (atoms.length < 2) throw new Error("Need at least two heavy atoms to make a repeat unit.");
+
+  // Open the anchor valences: reduce a double/triple bond between the anchors by
+  // one (a single or absent bond already leaves open valences after H removal).
+  for (const bond of bonds) {
+    const spansAnchors = (bond.a === anchorAId && bond.b === anchorBId) || (bond.a === anchorBId && bond.b === anchorAId);
+    if (spansAnchors && (bond.order === 2 || bond.order === 3)) {
+      bond.order = (bond.order - 1) as BondOrder;
+    }
+  }
+
+  const span = Math.hypot(
+    anchorA.position[0] - anchorB.position[0],
+    anchorA.position[1] - anchorB.position[1],
+    anchorA.position[2] - anchorB.position[2],
+  );
+  const label = safeLabel(`poly(${molecule.name})`, "Derived repeat unit");
+  return {
+    id: IMPORTED_TEMPLATE_ID,
+    name: label,
+    shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
+    family: "Derived polymer",
+    repeatLabel: label,
+    defaultRepeats: 4,
+    maxRepeats: 10,
+    step: [Math.max(2.4, span + 1.5), 0, 0],
+    connection: { leftAtomId: anchorAId, rightAtomId: anchorBId, order: 1 },
+    explicitGeometry: false,
+    atoms,
+    bonds,
+    groups: [
+      {
+        id: "repeat-unit",
+        label: "Repeat unit",
+        atomIds: atoms.map((atom) => atom.id),
+        bondIds: bonds.map((bond) => bond.id),
+        color: 0x44c7d8,
+      },
+    ],
+  };
+}
+
 export function updateTemplateAttachments(
   template: PolymerTemplate,
   leftAtomId: string,

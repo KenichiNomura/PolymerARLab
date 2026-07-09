@@ -29,6 +29,7 @@ import { installWebXR } from "./scene/webxr";
 import {
   IMPORTED_TEMPLATE_ID,
   buildMoleculeTemplate3D,
+  deriveRepeatUnit,
   importStructure,
   updateTemplateAttachments,
   type StructureImportFormat,
@@ -53,6 +54,9 @@ const structureInput = document.getElementById("structureInput") as HTMLTextArea
 const loadStructureBtn = document.getElementById("loadStructureBtn") as HTMLButtonElement;
 const leftAttachmentSelect = document.getElementById("leftAttachmentSelect") as HTMLSelectElement;
 const rightAttachmentSelect = document.getElementById("rightAttachmentSelect") as HTMLSelectElement;
+const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
+const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
+const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
 const repeatRange = document.getElementById("repeatRange") as HTMLInputElement;
 const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
@@ -296,7 +300,56 @@ function showImportedTemplate(template: PolymerTemplate, statusMessage: string) 
   exampleStructureSelect.value = "";
   repeatRange.value = "1";
   rebuildGraph();
+  populateAnchorControls(template);
   showStatus(statusMessage);
+}
+
+// Fill the "Make polymer" anchor selects from a molecule's heavy atoms, and
+// pre-select the atoms of its first double/triple bond (the vinyl-monomer case).
+function populateAnchorControls(template: PolymerTemplate) {
+  const heavy = template.atoms.filter((atom) => atom.element !== "H");
+  anchorASelect.replaceChildren();
+  anchorBSelect.replaceChildren();
+  const usable = heavy.length >= 2;
+  anchorASelect.disabled = !usable;
+  anchorBSelect.disabled = !usable;
+  makeRepeatUnitBtn.disabled = !usable;
+  if (!usable) return;
+
+  for (const atom of heavy) {
+    anchorASelect.appendChild(attachmentOption(atom));
+    anchorBSelect.appendChild(attachmentOption(atom));
+  }
+
+  const multiBond = template.bonds.find(
+    (bond) => (bond.order === 2 || bond.order === 3) && heavy.some((a) => a.id === bond.a) && heavy.some((a) => a.id === bond.b),
+  );
+  anchorASelect.value = multiBond ? multiBond.a : heavy[0].id;
+  anchorBSelect.value = multiBond ? multiBond.b : heavy[1].id;
+}
+
+function makeRepeatUnit() {
+  if (!importedTemplate) {
+    showImportStatus("Load a molecule first, then choose two backbone atoms.");
+    return;
+  }
+  try {
+    const derived = deriveRepeatUnit(importedTemplate, anchorASelect.value, anchorBSelect.value);
+    setPolymerMode(true);
+    importedTemplate = derived;
+    importedTemplateOption.hidden = false;
+    importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
+    polymerSelect.value = IMPORTED_TEMPLATE_ID;
+    exampleStructureSelect.value = "";
+    repeatRange.value = String(derived.defaultRepeats);
+    rebuildGraph();
+    showImportStatus(`Repeat unit from ${anchorASelect.value}-${anchorBSelect.value}: ${derived.name}.`);
+    showStatus(`Polymer repeat unit derived; adjust Repeats or re-pick the connection atoms.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showImportStatus(message);
+    showStatus(`Could not derive a repeat unit: ${message}`, true);
+  }
 }
 
 async function useSelectedExample() {
@@ -522,6 +575,7 @@ loadStructureBtn.addEventListener("click", () => {
 });
 leftAttachmentSelect.addEventListener("change", applyImportedAttachments);
 rightAttachmentSelect.addEventListener("change", applyImportedAttachments);
+makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
 repeatRange.addEventListener("input", rebuildGraph);
 
 labelsToggle.addEventListener("change", () => {
