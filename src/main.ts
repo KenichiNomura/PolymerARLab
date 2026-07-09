@@ -3,7 +3,7 @@ import { C60_TEMPLATE } from "./c60";
 import { createCameraOverlay } from "./cameraOverlay";
 import { conformerResourcesReady, preloadConformerResources, templateTo3D } from "./conformer3d";
 import { renderFallbackGraph } from "./fallback2d";
-import { buildReaxFFData, buildReaxFFInput, downloadTextFile } from "./lammpsExport";
+import { buildUFFData, buildUFFInput, downloadTextFile } from "./lammpsExport";
 import { isIOSDevice } from "./platform";
 import {
   POLYMER_TEMPLATES,
@@ -425,10 +425,11 @@ function saveLammps() {
   const baseName =
     (currentTemplate.shortName || currentTemplate.name || "structure").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") ||
     "structure";
-  const data = buildReaxFFData(graph, baseName);
+  const data = buildUFFData(graph, baseName);
   downloadTextFile(`${baseName}.data`, data.text);
-  downloadTextFile("in.relax", buildReaxFFInput(data.elementsInTypeOrder, baseName));
-  const summary = `Saved ${baseName}.data (${data.atomCount} atoms: ${data.elementsInTypeOrder.join(", ")}) and in.relax. Supply a ReaxFF ffield.reax to relax.`;
+  downloadTextFile("in.relax", buildUFFInput(data.elementsInTypeOrder, baseName, data.counts));
+  const c = data.counts;
+  const summary = `Saved ${baseName}.data (${c.atoms} atoms, ${c.bonds} bonds, ${c.angles} angles) and in.relax. Self-contained UFF-style force field (approximate); no ffield file needed.`;
   showImportStatus(summary);
   showStatus(summary);
 }
