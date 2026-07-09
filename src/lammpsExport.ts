@@ -70,7 +70,7 @@ export function buildReaxFFData(graph: MolecularGraph, title: string): ReaxFFDat
 export function buildReaxFFInput(elements: AtomSymbol[], name: string): string {
   const species = elements.join(" ");
   return [
-    `# Relax ${name} with ReaxFF: FIRE minimization, then NVT @ 300 K for 10 ps.`,
+    `# Relax ${name} with ReaxFF: FIRE minimization, then NVT @ 300 K for 2 ps.`,
     `# Provide a ReaxFF force-field file 'ffield.reax' with parameters for: ${elements.join(", ")}.`,
     `# Element order below must match the atom types in ${name}.data.`,
     "",
@@ -95,11 +95,11 @@ export function buildReaxFFInput(elements: AtomSymbol[], name: string): string {
     "min_style       fire",
     "minimize        1.0e-6 1.0e-8 10000 100000",
     "",
-    "# NVT at 300 K for 10 ps (0.25 fs timestep x 40000 steps)",
+    "# NVT at 300 K for 2 ps (0.25 fs timestep x 8000 steps)",
     "timestep        0.25",
     "velocity        all create 300.0 12345 mom yes rot yes dist gaussian",
     "fix             nvt all nvt temp 300.0 300.0 25.0",
-    "run             40000",
+    "run             8000",
     "",
     `write_data      ${name}.relaxed.data`,
     "",
