@@ -76,8 +76,16 @@ export default {
       return json({ error: "Origin not allowed." }, 403, cors);
     }
     // Origin headers are forgeable outside browsers, so the real gate is the
-    // shared token: without it, no Claude call is made and nothing is billed.
-    if (env.AI_ACCESS_TOKEN && request.headers.get("X-AI-Token") !== env.AI_ACCESS_TOKEN) {
+    // shared token. Fail closed: if the secret is not configured, reject every
+    // request (never fall open) so a missing secret can't leak API credits.
+    if (!env.AI_ACCESS_TOKEN) {
+      return json(
+        { error: "AI recognition is not configured on the server (missing AI_ACCESS_TOKEN). Run `wrangler secret put AI_ACCESS_TOKEN`." },
+        503,
+        cors,
+      );
+    }
+    if (request.headers.get("X-AI-Token") !== env.AI_ACCESS_TOKEN) {
       return json({ error: "Invalid or missing access token. Open the site once with ?aitoken=<passphrase>." }, 401, cors);
     }
 

@@ -83,6 +83,6 @@ Known v1 limits:
   hints are never emitted, so scans import in molecule mode);
 - two-letter labels must be written left to right (Cl, Br).
 
-Every recognition result carries per-atom/per-bond confidence and warnings,
-and lands in the editable graph JSON textarea for student review before the
-model is generated.
+Every recognition result carries per-atom/per-bond confidence and warnings.
+The recognized graph JSON is imported directly into the model; its atom/bond
+counts and any valence warnings surface in the Status panel for review.

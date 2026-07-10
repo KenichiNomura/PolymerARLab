@@ -177,11 +177,7 @@
       <div class="card legend">
         <div class="legend-row">
           <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h1.7l1-1.6a1 1 0 0 1 .85-.47h5.9a1 1 0 0 1 .85.47l1 1.6h1.7A1.5 1.5 0 0 1 20 8.5v8A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-8Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12.4" r="3.1" class="diagram-ink" stroke-width="1.6"/></svg></span>
-          <div><b>Camera</b><span class="what">Turn the live camera on/off to scan a drawing (mainly for phones). Lights up when active.</span></div>
-        </div>
-        <div class="legend-row">
-          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="diagram-ink" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg></span>
-          <div><b>Capture</b><span class="what">Take a snapshot of the camera view and recognize the Lewis structure. Enabled only while the camera is on.</span></div>
+          <div><b>Camera</b><span class="what">Turn the live camera on/off to scan a drawing (mainly for phones). Lights up when active. Once it's on, <b>tap the on-screen frame to capture</b> (drag its edges to resize, drag it to move).</span></div>
         </div>
         <div class="legend-row">
           <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 1 2.05 4.95" class="diagram-ink" stroke-width="1.6" stroke-linecap="round"/><path d="M5 7.5V12h4.5" class="diagram-ink" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -206,6 +202,10 @@
         <div class="legend-row">
           <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2" class="diagram-ink" stroke-width="1.6"/><circle cx="12" cy="8.1" r="1.05" fill="currentColor"/><path d="M12 11.2v5.2" class="diagram-ink" stroke-width="1.6" stroke-linecap="round"/></svg></span>
           <div><b>Status</b><span class="what">Show/hide a small panel with the molecule summary (atoms, bonds, bond orders), the latest message, and a valence check.</span></div>
+        </div>
+        <div class="legend-row">
+          <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10.3 5.3 7.9 5 6 5.2v11.2c1.9-.2 4.3.1 6 1.3 1.7-1.2 4.1-1.5 6-1.3V5.2c-1.9-.2-4.3.1-6 1.3Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 6.5v11.5" class="diagram-ink" stroke-width="1.6"/></svg></span>
+          <div><b>Tutorial</b><span class="what">Open this tutorial page.</span></div>
         </div>
       </div>
 
@@ -275,7 +275,7 @@
           <rect x="232" y="42" width="96" height="70" rx="4" class="diagram-ink" stroke-width="1"/>
           <text x="255" y="82" font-size="14" fill="currentColor">O=C=O</text>
           <circle cx="280" cy="126" r="7" fill="var(--accent)"/>
-          <text x="280" y="152" font-size="12" fill="var(--muted)" text-anchor="middle">2. Camera → Capture</text>
+          <text x="280" y="152" font-size="12" fill="var(--muted)" text-anchor="middle">2. Camera → tap frame</text>
           <path d="M350 85 h60" class="diagram-ink" stroke-width="2" marker-end="url(#ar)"/>
           <!-- 3d -->
           <circle cx="470" cy="85" r="12" fill="var(--muted)"/>
@@ -303,7 +303,7 @@
       <ol class="steps">
         <li><span class="stepnum">1</span><div><b>Draw a Lewis structure</b> on paper — clear bond lines and element letters recognize best (e.g. water, CO₂, ethanol).</div></li>
         <li><span class="stepnum">2</span><div><b>Capture it.</b>
-          <span class="platform">📱 Phone:</span> tap the <b>Camera</b> icon, aim so the drawing sits inside the on-screen frame, then tap <b>Capture</b>.
+          <span class="platform">📱 Phone:</span> tap the <b>Camera</b> icon, position the drawing inside the on-screen frame (drag its edges to resize), then <b>tap the frame</b> to capture. A shutter flash and a "Recognizing&hellip;" spinner show while it works.
           <span class="platform">🖥️ Desktop:</span> tap <b>Edit</b> → <b>Upload sketch</b> and choose a photo. The app recognizes the drawing and builds the 3-D molecule.</div></li>
         <li><span class="stepnum">3</span><div><b>Explore.</b> Drag to orbit, scroll/pinch to zoom, <b>Reset view</b> to recenter. Open <b>Edit</b> to toggle <b>Atom labels</b> and <b>Show hydrogens</b>; open <b>Status</b> to see atom/bond counts. <b>Clear</b> starts over.</div></li>
         <li><span class="stepnum">4</span><div><b>See it in AR — the molecule comes out of the paper.</b>

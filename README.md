@@ -138,7 +138,9 @@ npx wrangler deploy
 Enable AI scanning **per device** by opening `https://<your-site>/?aitoken=<passphrase>`
 once (persisted in `localStorage`; `?aitoken=off` forgets it). Devices without
 the token automatically use the free on-device recognizer, and the Worker
-rejects tokenless requests with `401` **before** any billable API call. The
+rejects tokenless requests with `401` **before** any billable API call. It
+**fails closed**: if the `AI_ACCESS_TOKEN` secret is missing, every request is
+rejected with `503` rather than falling open. The
 endpoint defaults to `DEFAULT_AI_ENDPOINT` in `src/aiRecognition.ts` and can be
 overridden with `?ai=<url>` (`?ai=off` disables, `?ai=default` restores). Model
 defaults to `claude-opus-4-8`; set the Worker `MODEL` var to `claude-haiku-4-5`

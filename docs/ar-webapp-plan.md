@@ -1,5 +1,13 @@
 # AR Webapp Implementation Plan
 
+> **Status:** this is the original roadmap (July 2026) and is kept for history.
+> For how the app works today, see [`README.md`](../README.md) and the live
+> tutorial (`public/tutorial.html`). Several early ideas here have since been
+> superseded — notably, structure input is now **PubChem download + a
+> monomer→polymer builder** (the SMILES/Molfile/JSON *Import custom structure*
+> panel and the curated *Polymer Examples* dropdown were removed), and a
+> **LAMMPS (UFF) export** was added. See "Shipped since this plan" below.
+
 This plan captures the cross-platform AR polymer webapp roadmap discussed on July 3, 2026.
 
 ## Goal
@@ -237,12 +245,37 @@ Draw or select a polystyrene repeat unit
   -> review the structure summary and bond orders
 ```
 
+## Shipped since this plan
+
+Major features added after the roadmap above (see git history / README for details):
+
+- **PubChem download** — load any molecule by name or CID with real 3D
+  coordinates (`src/pubchem.ts`, `buildMoleculeTemplate3D`), replacing the curated
+  small-molecule examples. C60 ships as a baked template.
+- **Make Polymer from Monomer** — pick two backbone anchor atoms on a loaded
+  monomer; the double bond opens and the unit tiles into a chain
+  (`deriveRepeatUnit`). Repeat units align along the backbone axis and **rotate
+  about it** to avoid side-group overlap (`bestTwist` in `conformer3d.ts`), with
+  natural bond lengths and **H-capped chain ends**.
+- **Removed** the *Import custom structure* (SMILES/Molfile/JSON) panel and the
+  *Polymer Examples* dropdown; the internal graph-JSON import path remains for the
+  scanner.
+- **LAMMPS (UFF) export** (`src/lammpsExport.ts`) — a self-contained data file +
+  `in.relax` (no external ffield): overlap-relief warm-up → FIRE minimization →
+  NVT 300 K / 10 ps (drift removed), writing separate `.min.xyz` / `.nvt.xyz`
+  trajectories and `.relaxed.data`.
+- **AR polish** — iOS USDZ/Quick Look plus a markerless Android WebXR path where
+  the molecule "grows out of" the tapped surface.
+- **Scan viewfinder** — a resizable/movable 4:3 frame that crops the capture;
+  **tap the frame to capture** (the separate Capture icon was removed) with a
+  shutter flash + "Recognizing…" spinner.
+- **UI** — top-left icon toolbar (Camera, Reset, Clear, AR View); a bottom-left
+  dock of Edit / Status / Tutorial toggles; per-element atom labels (C1, C2, …).
+- **Docs** — an illustrated tutorial page (`public/tutorial.html`).
+
 ## Immediate Next Step
 
-Recognition now has two engines (AI via `worker/` + Claude vision, and the
-on-device classical fallback), and all structures render with real 3D
-conformers. Next:
-
-1. Deploy the `worker/` recognizer (needs an Anthropic API key + Cloudflare account) and evaluate AI recognition on varied real handwriting, including rings and polymer brackets (the Worker already returns repeat-unit hints).
-2. Test the AR paths on physical devices: Android Chrome WebXR placement and the iPhone Safari camera overlay.
-3. Add USDZ/Quick Look export for native iOS AR preview (Phase 3), then Phase 5 packaging (PWA manifest, saved examples, shareable links).
+1. Evaluate AI recognition on varied real handwriting, including rings and polymer
+   brackets (the Worker already returns repeat-unit hints).
+2. Test the AR paths on physical Android and iPhone devices.
+3. Phase 5 packaging: PWA manifest/installability, shareable structure links.
