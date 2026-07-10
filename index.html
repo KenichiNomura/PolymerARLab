@@ -121,33 +121,37 @@
       }
 
       #scanFrameBox {
-        position: relative;
-        width: min(85vw, 640px);
-        aspect-ratio: 4 / 3;
-        max-height: 66vh;
+        position: absolute;
+        /* left/top/width/height are set inline by scanFrame.ts (default: centered 4:3). */
         border: 1px solid rgba(247, 243, 232, 0.55);
         border-radius: 14px;
         /* Spotlight scrim: dim everything outside the frame. */
         box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+        pointer-events: auto;
+        touch-action: none;
+        cursor: pointer;
       }
 
       .scan-corner {
         position: absolute;
-        width: 26px;
-        height: 26px;
+        width: 34px;
+        height: 34px;
         border: 3px solid #8fe3d0;
+        pointer-events: auto;
+        touch-action: none;
       }
 
-      .scan-corner.tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
-      .scan-corner.tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
-      .scan-corner.bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
-      .scan-corner.br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+      .scan-corner.tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; cursor: nwse-resize; }
+      .scan-corner.tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; cursor: nesw-resize; }
+      .scan-corner.bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; cursor: nesw-resize; }
+      .scan-corner.br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; cursor: nwse-resize; }
 
       .scan-hint {
         position: absolute;
         left: 50%;
         bottom: -30px;
         transform: translateX(-50%);
+        pointer-events: none;
         white-space: nowrap;
         color: rgba(247, 243, 232, 0.9);
         font-size: 12px;
@@ -673,7 +677,7 @@
         <span class="scan-corner tr"></span>
         <span class="scan-corner bl"></span>
         <span class="scan-corner br"></span>
-        <span class="scan-hint">Fit your Lewis structure inside the frame</span>
+        <span class="scan-hint">Tap to capture &middot; drag edges to resize</span>
       </div>
     </div>
 

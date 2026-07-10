@@ -17,6 +17,7 @@ import {
 import { fetchCompound, resolveCid } from "./pubchem";
 import { RDKitImportError, normalizeStructureWithRDKit, preloadRDKit } from "./rdkitService";
 import { runSketchRecognition, type ImportOutcome } from "./recognitionFlow";
+import { createScanFrame } from "./scanFrame";
 import { createQuickLook } from "./scene/quickLook";
 import {
   applyPreviewTransform,
@@ -544,10 +545,16 @@ hydrogensToggle.addEventListener("change", () => {
 cameraModeBtn.addEventListener("click", () => {
   void cameraOverlay.toggle();
 });
-captureBtn.addEventListener("click", () => {
+function captureFromCamera() {
   if (!cameraOverlay.drawFrameTo(scanCanvas)) return;
   updateScanPreview();
   void runSketchRecognition("camera-capture", recognitionOptions);
+}
+captureBtn.addEventListener("click", captureFromCamera);
+createScanFrame({
+  boxEl: document.getElementById("scanFrameBox")!,
+  cornerEls: [...document.querySelectorAll<HTMLElement>("#scanFrameBox .scan-corner")],
+  onCapture: captureFromCamera,
 });
 uploadSketchBtn.addEventListener("click", () => sketchFileInput.click());
 sketchFileInput.addEventListener("change", () => {
