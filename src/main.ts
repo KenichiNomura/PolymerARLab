@@ -494,6 +494,7 @@ const cameraOverlay = createCameraOverlay({
   toggleButton: cameraModeBtn,
   captureButton: captureBtn,
   overlayEl: fallbackEl,
+  frameEl: document.getElementById("scanFrameBox")!,
   getRuntime: () => three,
 });
 

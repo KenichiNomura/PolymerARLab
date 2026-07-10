@@ -9,6 +9,7 @@ export interface CameraOverlayOptions {
   toggleButton: HTMLButtonElement;
   captureButton: HTMLButtonElement;
   overlayEl: HTMLElement;
+  frameEl: HTMLElement;
   getRuntime: () => ThreeRuntime | null;
 }
 
@@ -62,19 +63,54 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
     options.captureButton.disabled = true;
   }
 
-  // Draws the current video frame onto the canvas; false when not ready.
+  // Draws the framed region of the current video onto the canvas; false when
+  // not ready. Crops to #scanFrameBox so recognition sees only the framed
+  // drawing, accounting for the video's object-fit: cover scaling.
   function drawFrameTo(canvas: HTMLCanvasElement): boolean {
-    if (!stream || options.videoEl.videoWidth === 0) {
+    const video = options.videoEl;
+    if (!stream || video.videoWidth === 0) {
       showScanStatus("Camera is not ready yet.", true);
       return false;
     }
-    canvas.width = options.videoEl.videoWidth;
-    canvas.height = options.videoEl.videoHeight;
-    canvas.getContext("2d")!.drawImage(options.videoEl, 0, 0, canvas.width, canvas.height);
+
+    const crop = frameCropRegion(video, options.frameEl);
+    canvas.width = Math.round(crop.sw);
+    canvas.height = Math.round(crop.sh);
+    canvas.getContext("2d")!.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
     return true;
   }
 
   return { toggle, stop, drawFrameTo, isActive: () => stream !== null };
+}
+
+// Maps the on-screen viewfinder box to native video pixels. The video fills the
+// viewport with object-fit: cover, so it is scaled by s = max(W/vw, H/vh) and
+// centered (cropping the overflow). Falls back to the whole frame if the box is
+// unavailable or degenerate.
+function frameCropRegion(
+  video: HTMLVideoElement,
+  frameEl: HTMLElement,
+): { sx: number; sy: number; sw: number; sh: number } {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const full = { sx: 0, sy: 0, sw: vw, sh: vh };
+
+  const displayW = video.clientWidth;
+  const displayH = video.clientHeight;
+  const rect = frameEl.getBoundingClientRect();
+  if (displayW === 0 || displayH === 0 || rect.width === 0 || rect.height === 0) return full;
+
+  const scale = Math.max(displayW / vw, displayH / vh);
+  const offsetX = (displayW - vw * scale) / 2;
+  const offsetY = (displayH - vh * scale) / 2;
+
+  const clamp = (value: number, max: number) => Math.min(max, Math.max(0, value));
+  const sx = clamp((rect.left - offsetX) / scale, vw);
+  const sy = clamp((rect.top - offsetY) / scale, vh);
+  const sw = clamp(rect.width / scale, vw - sx);
+  const sh = clamp(rect.height / scale, vh - sy);
+  if (sw < 1 || sh < 1) return full;
+  return { sx, sy, sw, sh };
 }
 
 async function requestCameraStream(): Promise<MediaStream> {

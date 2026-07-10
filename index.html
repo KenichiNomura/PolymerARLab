@@ -104,6 +104,57 @@
         display: block;
       }
 
+      /* Scan viewfinder: only shown while the camera is active; the capture is
+         cropped to #scanFrameBox so recognition sees just the framed drawing. */
+      #scanFrame {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+
+      body.camera-active #scanFrame {
+        display: flex;
+      }
+
+      #scanFrameBox {
+        position: relative;
+        width: min(85vw, 640px);
+        aspect-ratio: 4 / 3;
+        max-height: 66vh;
+        border: 1px solid rgba(247, 243, 232, 0.55);
+        border-radius: 14px;
+        /* Spotlight scrim: dim everything outside the frame. */
+        box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+      }
+
+      .scan-corner {
+        position: absolute;
+        width: 26px;
+        height: 26px;
+        border: 3px solid #8fe3d0;
+      }
+
+      .scan-corner.tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+      .scan-corner.tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+      .scan-corner.bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+      .scan-corner.br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+
+      .scan-hint {
+        position: absolute;
+        left: 50%;
+        bottom: -30px;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        color: rgba(247, 243, 232, 0.9);
+        font-size: 12px;
+        font-weight: 700;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      }
+
       #app {
         position: fixed;
         inset: 0;
@@ -615,6 +666,16 @@
     <video id="cameraFeed" autoplay muted playsinline></video>
     <div id="app"></div>
     <div id="fallbackMolecule"></div>
+
+    <div id="scanFrame" aria-hidden="true">
+      <div id="scanFrameBox">
+        <span class="scan-corner tl"></span>
+        <span class="scan-corner tr"></span>
+        <span class="scan-corner bl"></span>
+        <span class="scan-corner br"></span>
+        <span class="scan-hint">Fit your Lewis structure inside the frame</span>
+      </div>
+    </div>
 
     <header class="topbar">
       <div class="icon-toolbar">
