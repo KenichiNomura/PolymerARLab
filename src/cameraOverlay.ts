@@ -7,7 +7,6 @@ import { setBackgroundVisible, type ThreeRuntime } from "./scene/threeScene";
 export interface CameraOverlayOptions {
   videoEl: HTMLVideoElement;
   toggleButton: HTMLButtonElement;
-  captureButton: HTMLButtonElement;
   overlayEl: HTMLElement;
   frameEl: HTMLElement;
   getRuntime: () => ThreeRuntime | null;
@@ -38,8 +37,7 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
       options.toggleButton.classList.add("is-active");
       options.toggleButton.setAttribute("aria-pressed", "true");
       options.toggleButton.title = "Stop camera";
-      options.captureButton.disabled = false;
-      showScanStatus("Camera overlay active. Capture your sketch, then verify the structure model.");
+      showScanStatus("Camera active. Frame your sketch, then tap the frame to capture.");
     } catch (error) {
       showScanStatus(cameraErrorMessage(error), true);
       stop();
@@ -60,7 +58,6 @@ export function createCameraOverlay(options: CameraOverlayOptions) {
     options.toggleButton.classList.remove("is-active");
     options.toggleButton.setAttribute("aria-pressed", "false");
     options.toggleButton.title = "Camera";
-    options.captureButton.disabled = true;
   }
 
   // Draws the framed region of the current video onto the canvas; false when

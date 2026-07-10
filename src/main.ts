@@ -57,7 +57,6 @@ const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
 const hydrogensToggle = document.getElementById("hydrogensToggle") as HTMLInputElement;
 const cameraModeBtn = document.getElementById("cameraModeBtn") as HTMLButtonElement;
-const captureBtn = document.getElementById("captureBtn") as HTMLButtonElement;
 const uploadSketchBtn = document.getElementById("uploadSketchBtn") as HTMLButtonElement;
 const sketchFileInput = document.getElementById("sketchFileInput") as HTMLInputElement;
 const saveLammpsBtn = document.getElementById("saveLammpsBtn") as HTMLButtonElement;
@@ -70,6 +69,9 @@ const statusToggleBtn = document.getElementById("statusToggleBtn") as HTMLButton
 const statusPanel = document.getElementById("statusPanel") as HTMLElement;
 const editToggleBtn = document.getElementById("editToggleBtn") as HTMLButtonElement;
 const editPanel = document.getElementById("editPanel") as HTMLElement;
+const tutorialBtn = document.getElementById("tutorialBtn") as HTMLButtonElement;
+const captureFlash = document.getElementById("captureFlash") as HTMLElement;
+const scanBusy = document.getElementById("scanBusy") as HTMLElement;
 const scanCanvas = document.getElementById("scanCanvas") as HTMLCanvasElement;
 const scanPreview = document.getElementById("scanPreview")!;
 const structureSummary = document.getElementById("structureSummary")!;
@@ -451,7 +453,7 @@ async function loadSketchImageFile() {
   }
 
   updateScanPreview();
-  await runSketchRecognition("image-upload", recognitionOptions);
+  await runRecognitionWithProgress("image-upload");
 }
 
 // ---------------------------------------------------------------------------
@@ -493,7 +495,6 @@ const quickLook = createQuickLook({
 const cameraOverlay = createCameraOverlay({
   videoEl,
   toggleButton: cameraModeBtn,
-  captureButton: captureBtn,
   overlayEl: fallbackEl,
   frameEl: document.getElementById("scanFrameBox")!,
   getRuntime: () => three,
@@ -545,12 +546,25 @@ hydrogensToggle.addEventListener("change", () => {
 cameraModeBtn.addEventListener("click", () => {
   void cameraOverlay.toggle();
 });
+// Brief shutter flash so a tap-to-capture feels like taking a photo.
+function flashShutter() {
+  captureFlash.classList.remove("flash");
+  void captureFlash.offsetWidth; // restart the animation
+  captureFlash.classList.add("flash");
+}
+
+// Wrap a recognition run with a spinner while it works.
+function runRecognitionWithProgress(source: "camera-capture" | "image-upload") {
+  scanBusy.classList.add("is-on");
+  return runSketchRecognition(source, recognitionOptions).finally(() => scanBusy.classList.remove("is-on"));
+}
+
 function captureFromCamera() {
   if (!cameraOverlay.drawFrameTo(scanCanvas)) return;
   updateScanPreview();
-  void runSketchRecognition("camera-capture", recognitionOptions);
+  flashShutter();
+  void runRecognitionWithProgress("camera-capture");
 }
-captureBtn.addEventListener("click", captureFromCamera);
 createScanFrame({
   boxEl: document.getElementById("scanFrameBox")!,
   cornerEls: [...document.querySelectorAll<HTMLElement>("#scanFrameBox .scan-corner")],
@@ -572,6 +586,7 @@ function togglePanel(panel: HTMLElement, button: HTMLButtonElement) {
 }
 statusToggleBtn.addEventListener("click", () => togglePanel(statusPanel, statusToggleBtn));
 editToggleBtn.addEventListener("click", () => togglePanel(editPanel, editToggleBtn));
+tutorialBtn.addEventListener("click", () => window.open("tutorial.html", "_blank", "noopener"));
 arQuickLookBtn.addEventListener("click", () => {
   // An active camera stream holds the camera hardware that iOS AR Quick Look
   // needs, so stop the overlay first and let the next tap launch AR with the
