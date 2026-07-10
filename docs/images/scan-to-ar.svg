@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#64748b"/></marker>
+  </defs>
+  <!-- paper -->
+  <rect x="20" y="40" width="120" height="100" rx="6" fill="none" stroke="#64748b" stroke-width="1.5"/>
+  <text x="52" y="98" font-size="22" fill="#334155" font-weight="600">O=C=O</text>
+  <text x="80" y="162" font-size="12" fill="#64748b" text-anchor="middle">1. Draw on paper</text>
+  <path d="M150 90 h60" stroke="#64748b" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- phone -->
+  <rect x="220" y="35" width="120" height="110" rx="12" fill="none" stroke="#64748b" stroke-width="1.5"/>
+  <rect x="232" y="47" width="96" height="70" rx="4" fill="none" stroke="#64748b" stroke-width="1"/>
+  <text x="255" y="90" font-size="15" fill="#334155">O=C=O</text>
+  <circle cx="280" cy="131" r="7" fill="#2a9d8f"/>
+  <text x="280" y="162" font-size="12" fill="#64748b" text-anchor="middle">2. Camera, tap frame</text>
+  <path d="M350 90 h60" stroke="#64748b" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- 3d -->
+  <circle cx="470" cy="90" r="12" fill="#8a8f98"/>
+  <circle cx="435" cy="90" r="9" fill="#e63946"/>
+  <circle cx="505" cy="90" r="9" fill="#e63946"/>
+  <line x1="470" y1="90" x2="435" y2="90" stroke="#64748b" stroke-width="4"/>
+  <line x1="470" y1="90" x2="505" y2="90" stroke="#64748b" stroke-width="4"/>
+  <text x="470" y="162" font-size="12" fill="#64748b" text-anchor="middle">3. 3-D model</text>
+  <path d="M525 90 h60" stroke="#64748b" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- AR on desk -->
+  <path d="M600 125 l70 -18 l70 18 l-70 18 Z" fill="#e8f5f3" stroke="#64748b" stroke-width="1.4"/>
+  <circle cx="670" cy="85" r="10" fill="#8a8f98"/>
+  <circle cx="648" cy="91" r="7" fill="#e63946"/>
+  <circle cx="692" cy="91" r="7" fill="#e63946"/>
+  <line x1="670" y1="85" x2="648" y2="91" stroke="#64748b" stroke-width="3"/>
+  <line x1="670" y1="85" x2="692" y2="91" stroke="#64748b" stroke-width="3"/>
+  <text x="670" y="170" font-size="12" fill="#64748b" text-anchor="middle">4. On the desk in AR</text>
+</svg>
