@@ -791,7 +791,18 @@
           <details id="makePolymerPanel" class="inline-section">
             <summary>Make Polymer from Monomer</summary>
             <div class="inline-section-body">
-              <p class="hint">Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.</p>
+              <div class="field">
+                <label>Curing mechanism</label>
+                <div class="toggle">
+                  <input id="mechanismAddition" type="radio" name="mechanism" value="addition" checked />
+                  <label for="mechanismAddition">Addition (opens a C=C)</label>
+                </div>
+                <div class="toggle">
+                  <input id="mechanismCondensation" type="radio" name="mechanism" value="condensation" />
+                  <label for="mechanismCondensation">Condensation (releases H2O)</label>
+                </div>
+              </div>
+              <p class="hint" id="mechanismHint">Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.</p>
               <div class="attachment-grid">
                 <label for="anchorASelect">
                   Anchor 1
@@ -803,6 +814,17 @@
                 </label>
               </div>
               <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
+              <div class="toggle" id="twoMonomerToggleRow" hidden>
+                <input id="twoMonomerToggle" type="checkbox" />
+                <label for="twoMonomerToggle">Two monomers (A-A + B-B)</label>
+              </div>
+              <div id="twoMonomerFlow" hidden>
+                <p class="hint" id="twoMonomerStatus">Load monomer A (e.g. a diol or diamine), pick its two anchors, then Set as monomer A. Next load monomer B (a diacid), pick its anchors, and Combine.</p>
+                <div class="button-row">
+                  <button id="setMonomerABtn" type="button" disabled>Set as monomer A</button>
+                  <button id="combineMonomersBtn" type="button" disabled>Combine A + B</button>
+                </div>
+              </div>
 
               <div class="field polymer-only">
                 <label for="repeatRange">Repeats</label>

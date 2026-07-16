@@ -12,6 +12,7 @@ import {
   getTemplate,
   summarizeBondOrders,
   type MolecularGraph,
+  type PolymerMechanism,
   type PolymerTemplate,
 } from "./polymerData";
 import { fetchCompound, resolveCid } from "./pubchem";
@@ -31,8 +32,10 @@ import { installWebXR } from "./scene/webxr";
 import {
   IMPORTED_TEMPLATE_ID,
   buildMoleculeTemplate3D,
+  combineCondensationMonomers,
   deriveRepeatUnit,
   importStructure,
+  type MonomerSelection,
   type StructureImportFormat,
 } from "./structureImport";
 import { populateTemplateSelect } from "./ui/examples";
@@ -52,6 +55,15 @@ const makePolymerPanel = document.getElementById("makePolymerPanel") as HTMLDeta
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
+const mechanismAddition = document.getElementById("mechanismAddition") as HTMLInputElement;
+const mechanismCondensation = document.getElementById("mechanismCondensation") as HTMLInputElement;
+const mechanismHint = document.getElementById("mechanismHint")!;
+const twoMonomerToggleRow = document.getElementById("twoMonomerToggleRow") as HTMLElement;
+const twoMonomerToggle = document.getElementById("twoMonomerToggle") as HTMLInputElement;
+const twoMonomerFlow = document.getElementById("twoMonomerFlow") as HTMLElement;
+const twoMonomerStatus = document.getElementById("twoMonomerStatus")!;
+const setMonomerABtn = document.getElementById("setMonomerABtn") as HTMLButtonElement;
+const combineMonomersBtn = document.getElementById("combineMonomersBtn") as HTMLButtonElement;
 const repeatRange = document.getElementById("repeatRange") as HTMLInputElement;
 const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
@@ -85,6 +97,34 @@ let currentTemplate: PolymerTemplate = POLYMER_TEMPLATES[0];
 let importedTemplate: PolymerTemplate | null = null;
 let currentGraph: MolecularGraph | null = null;
 let three: ThreeRuntime | null = null;
+
+// Two-monomer condensation flow: monomer A is stashed here (raw template +
+// anchors) while the user loads monomer B, because loading B replaces
+// importedTemplate.
+let pendingMonomerA: MonomerSelection | null = null;
+// The molecule currently backing the anchor dropdowns, so a mechanism switch
+// can re-run the anchor preselection.
+let anchorTemplate: PolymerTemplate | null = null;
+
+function currentMechanism(): PolymerMechanism {
+  return mechanismCondensation.checked ? "condensation" : "addition";
+}
+
+const MECHANISM_HINTS: Record<PolymerMechanism, string> = {
+  addition:
+    "Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.",
+  condensation:
+    "Pick the -COOH carbon as one anchor and the -OH oxygen (or -NH2 nitrogen) as the other; each new bond releases a water molecule.",
+};
+
+function updateMechanismUi() {
+  const condensation = currentMechanism() === "condensation";
+  mechanismHint.textContent = MECHANISM_HINTS[currentMechanism()];
+  twoMonomerToggleRow.hidden = !condensation;
+  twoMonomerFlow.hidden = !condensation || !twoMonomerToggle.checked;
+  makeRepeatUnitBtn.hidden = condensation && twoMonomerToggle.checked;
+  if (anchorTemplate) applyAnchorPreselect(anchorTemplate);
+}
 
 // Polymer mode is entered programmatically (deriving a repeat unit or choosing a
 // polymer example), not via a user toggle.
@@ -205,8 +245,9 @@ function updateSummary() {
   const modeLabel = isPolymerMode() ? "Polymer" : "Molecule";
   const structureLabel = isPolymerMode() ? currentTemplate.repeatLabel : currentTemplate.name;
   const repeatText = isPolymerMode() ? ` | n=${currentGraph.repeatCount}` : "";
+  const byproductText = currentGraph.byproducts.length ? ` | releases ${currentGraph.byproducts.length} H2O` : "";
   structureSummary.textContent =
-    `${modeLabel}: ${structureLabel}${repeatText} | ${currentGraph.atoms.length} atoms | ${currentGraph.bonds.length} bonds\n` +
+    `${modeLabel}: ${structureLabel}${repeatText} | ${currentGraph.atoms.length} atoms | ${currentGraph.bonds.length} bonds${byproductText}\n` +
     `single ${bondSummary.single} | double ${bondSummary.double} | triple ${bondSummary.triple} | aromatic ${bondSummary.aromatic}`;
 
   validationStatus.textContent = currentGraph.warnings.length
@@ -311,12 +352,71 @@ function populateAnchorControls(template: PolymerTemplate) {
   anchorASelect.disabled = !usable;
   anchorBSelect.disabled = !usable;
   makeRepeatUnitBtn.disabled = !usable;
+  setMonomerABtn.disabled = !usable;
+  combineMonomersBtn.disabled = !usable || !pendingMonomerA;
+  anchorTemplate = usable ? template : null;
   if (!usable) return;
 
   for (const atom of heavy) {
     const label = labels.get(atom.id) ?? atom.element;
     anchorASelect.appendChild(anchorOption(atom.id, label));
     anchorBSelect.appendChild(anchorOption(atom.id, label));
+  }
+
+  applyAnchorPreselect(template);
+}
+
+// Suggest sensible anchors for the active mechanism: the first double/triple
+// bond for addition (the vinyl case); for condensation, reactive sites in
+// -COOH-carbon / -OH / -NH2 order, so a hydroxy acid gets acid + partner and a
+// diacid or diol gets its two like groups. The user can still re-pick anything.
+function applyAnchorPreselect(template: PolymerTemplate) {
+  const heavy = template.atoms.filter((atom) => atom.element !== "H");
+  if (heavy.length < 2) return;
+
+  if (currentMechanism() === "condensation") {
+    const heavyIds = new Set(heavy.map((atom) => atom.id));
+    const elementById = new Map(heavy.map((atom) => [atom.id, atom.element]));
+    const heavyBonds = template.bonds.filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b));
+    const neighborsOf = (atomId: string) =>
+      heavyBonds
+        .filter((bond) => bond.a === atomId || bond.b === atomId)
+        .map((bond) => ({ otherId: bond.a === atomId ? bond.b : bond.a, order: bond.order }));
+
+    const acidCarbons: string[] = [];
+    const acidHydroxyls = new Set<string>();
+    for (const atom of heavy) {
+      if (atom.element !== "C") continue;
+      const neighbors = neighborsOf(atom.id);
+      const carbonyl = neighbors.some((n) => n.order === 2 && elementById.get(n.otherId) === "O");
+      const hydroxyl = neighbors.find(
+        (n) => n.order === 1 && elementById.get(n.otherId) === "O" && neighborsOf(n.otherId).length === 1,
+      );
+      if (carbonyl && hydroxyl) {
+        acidCarbons.push(atom.id);
+        acidHydroxyls.add(hydroxyl.otherId);
+      }
+    }
+    const partners = heavy
+      .filter((atom) => !acidHydroxyls.has(atom.id))
+      .filter((atom) => {
+        const degree = neighborsOf(atom.id).length;
+        return (atom.element === "O" && degree === 1) || (atom.element === "N" && degree <= 2);
+      })
+      .map((atom) => atom.id);
+
+    // Acid + partner (hydroxy/amino acid), two acids (diacid), two partners
+    // (diol/diamine) — in that order of preference.
+    const pick =
+      acidCarbons.length > 0 && partners.length > 0
+        ? [partners[0], acidCarbons[0]]
+        : acidCarbons.length >= 2
+          ? [acidCarbons[0], acidCarbons[1]]
+          : partners.length >= 2
+            ? [partners[0], partners[1]]
+            : [heavy[0].id, heavy[1].id];
+    [anchorASelect.value, anchorBSelect.value] = pick;
+    return;
   }
 
   const multiBond = template.bonds.find(
@@ -339,20 +439,68 @@ function makeRepeatUnit() {
     return;
   }
   try {
-    const derived = deriveRepeatUnit(importedTemplate, anchorASelect.value, anchorBSelect.value);
-    setPolymerMode(true);
-    importedTemplate = derived;
-    importedTemplateOption.hidden = false;
-    importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
-    polymerSelect.value = IMPORTED_TEMPLATE_ID;
-    repeatRange.value = String(derived.defaultRepeats);
-    rebuildGraph();
+    const mechanism = currentMechanism();
+    const derived = deriveRepeatUnit(importedTemplate, anchorASelect.value, anchorBSelect.value, { mechanism });
+    activatePolymerTemplate(derived);
     showImportStatus(`Repeat unit from ${anchorASelect.value}-${anchorBSelect.value}: ${derived.name}.`);
-    showStatus(`Polymer repeat unit derived; adjust Repeats or re-pick the connection atoms.`);
+    showStatus(
+      mechanism === "condensation"
+        ? "Polymer repeat unit derived; each new link releases one H2O. Adjust Repeats to grow the chain."
+        : "Polymer repeat unit derived; adjust Repeats or re-pick the connection atoms.",
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     showImportStatus(message);
     showStatus(`Could not derive a repeat unit: ${message}`, true);
+  }
+}
+
+// Shared tail of makeRepeatUnit / combineMonomers: install the derived repeat
+// unit as the imported template and rebuild in polymer mode.
+function activatePolymerTemplate(derived: PolymerTemplate) {
+  setPolymerMode(true);
+  importedTemplate = derived;
+  importedTemplateOption.hidden = false;
+  importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
+  polymerSelect.value = IMPORTED_TEMPLATE_ID;
+  repeatRange.value = String(derived.defaultRepeats);
+  rebuildGraph();
+}
+
+function setMonomerA() {
+  if (!importedTemplate) {
+    showImportStatus("Load monomer A first (PubChem, scan, or example), then pick its two anchors.");
+    return;
+  }
+  pendingMonomerA = { template: importedTemplate, anchorA: anchorASelect.value, anchorB: anchorBSelect.value };
+  combineMonomersBtn.disabled = false;
+  const name = importedTemplate.name || "monomer A";
+  twoMonomerStatus.textContent = `Monomer A: ${name} (anchors ${anchorASelect.value}, ${anchorBSelect.value}). Now load monomer B and pick its two anchors, then Combine.`;
+  showStatus(`Monomer A set: ${name}. Load monomer B next.`);
+}
+
+function combineMonomers() {
+  if (!pendingMonomerA) {
+    showImportStatus("Set monomer A first.");
+    return;
+  }
+  if (!importedTemplate) {
+    showImportStatus("Load monomer B, pick its anchors, then Combine.");
+    return;
+  }
+  try {
+    const combined = combineCondensationMonomers(pendingMonomerA, {
+      template: importedTemplate,
+      anchorA: anchorASelect.value,
+      anchorB: anchorBSelect.value,
+    });
+    activatePolymerTemplate(combined);
+    showImportStatus(`Combined repeat unit: ${combined.name}.`);
+    showStatus("Monomers combined; every ester/amide bond releases one H2O. Adjust Repeats to grow the chain.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showImportStatus(message);
+    showStatus(`Could not combine the monomers: ${message}`, true);
   }
 }
 
@@ -531,6 +679,11 @@ pubchemInput.addEventListener("keydown", (event) => {
   }
 });
 makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
+mechanismAddition.addEventListener("change", updateMechanismUi);
+mechanismCondensation.addEventListener("change", updateMechanismUi);
+twoMonomerToggle.addEventListener("change", updateMechanismUi);
+setMonomerABtn.addEventListener("click", setMonomerA);
+combineMonomersBtn.addEventListener("click", combineMonomers);
 saveLammpsBtn.addEventListener("click", saveLammps);
 repeatRange.addEventListener("input", rebuildGraph);
 
