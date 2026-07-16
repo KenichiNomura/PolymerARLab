@@ -495,6 +495,73 @@
         line-height: 1.4;
       }
 
+      /* Polymer builder panel: mechanism chooser, then numbered build steps. */
+      .mode-btn {
+        display: grid;
+        gap: 2px;
+        justify-items: start;
+        min-height: 54px;
+        padding: 8px 12px;
+        text-align: left;
+        white-space: normal;
+      }
+
+      .mode-btn small {
+        color: rgba(247, 243, 232, 0.62);
+        font-size: 11px;
+      }
+
+      .builder-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .builder-head span {
+        color: #ffd166;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .slot-toggle {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .slot-toggle[hidden] {
+        display: none;
+      }
+
+      .slot-toggle button {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .slot-toggle button.is-active {
+        border-color: #44c7d8;
+        color: #8fe3d0;
+        box-shadow: 0 0 0 1px rgba(68, 199, 216, 0.45);
+      }
+
+      #builderChooser,
+      #builderSection {
+        display: grid;
+        gap: 10px;
+      }
+
+      #builderChooser[hidden],
+      #builderSection[hidden] {
+        display: none;
+      }
+
+      #builderStatus.is-error {
+        color: #ff9d85;
+      }
+
       body:not(.polymer-mode) .polymer-only {
         display: none;
       }
@@ -786,46 +853,72 @@
 
           <select id="polymerSelect" hidden aria-hidden="true"></select>
 
-          <details id="makePolymerPanel" class="inline-section">
-            <summary>Make Polymer from Monomer</summary>
-            <div class="inline-section-body">
-              <div class="field">
-                <label>Curing mechanism</label>
-                <div class="toggle">
-                  <input id="mechanismAddition" type="radio" name="mechanism" value="addition" checked />
-                  <label for="mechanismAddition">Addition (opens a C=C)</label>
-                </div>
-                <div class="toggle">
-                  <input id="mechanismCondensation" type="radio" name="mechanism" value="condensation" />
-                  <label for="mechanismCondensation">Condensation (releases H2O)</label>
-                </div>
-              </div>
-              <p class="hint" id="mechanismHint">Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.</p>
-              <div class="attachment-grid">
-                <label for="anchorASelect">
-                  Anchor 1
-                  <select id="anchorASelect" disabled></select>
-                </label>
-                <label for="anchorBSelect">
-                  Anchor 2
-                  <select id="anchorBSelect" disabled></select>
-                </label>
-              </div>
-              <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
-              <button id="twoMonomerBtn" type="button" hidden>+ Use two monomers (A-A + B-B)</button>
-              <p class="hint" id="twoMonomerStatus" hidden></p>
+          <div id="importStatus">Template library active.</div>
+      </div>
 
-              <div class="field polymer-only">
-                <label for="repeatRange">Repeats</label>
-                <div class="range-row">
-                  <input id="repeatRange" type="range" min="1" max="12" value="4" />
-                  <span id="repeatValue">4</span>
-                </div>
+      <div id="polymerPanel" class="control-panel" aria-label="Polymer builder" hidden>
+        <div id="builderChooser">
+          <div class="field">
+            <label>Build a polymer &mdash; choose how it cures</label>
+          </div>
+          <button id="modeAdditionBtn" type="button" class="mode-btn">
+            Addition cure
+            <small>opens a C=C double bond, no byproduct</small>
+          </button>
+          <button id="modeCondensationBtn" type="button" class="mode-btn">
+            Condensation cure
+            <small>each new bond releases one H&#8322;O molecule</small>
+          </button>
+        </div>
+
+        <div id="builderSection" hidden>
+          <div class="builder-head">
+            <span id="builderTitle">Addition cure</span>
+            <button id="builderResetBtn" type="button">&#10005; Start over</button>
+          </div>
+
+          <div class="field">
+            <label>1 &middot; Load monomer(s)</label>
+            <div id="slotToggle" class="slot-toggle">
+              <button id="slotABtn" type="button" class="is-active">A: empty</button>
+              <button id="slotBBtn" type="button">B: empty</button>
+            </div>
+            <div class="import-grid">
+              <input id="builderPubchemInput" type="text" placeholder="PubChem name or CID" aria-label="PubChem name or CID" spellcheck="false" />
+              <button id="builderPubchemLoadBtn" type="button">Load</button>
+            </div>
+            <button id="builderSketchBtn" type="button">Upload sketch</button>
+          </div>
+
+          <div class="field">
+            <label id="anchorStepLabel">2 &middot; Pick the two anchor atoms</label>
+            <div class="attachment-grid">
+              <label for="anchorASelect">
+                Anchor 1
+                <select id="anchorASelect" disabled></select>
+              </label>
+              <label for="anchorBSelect">
+                Anchor 2
+                <select id="anchorBSelect" disabled></select>
+              </label>
+            </div>
+            <p class="hint" id="mechanismHint"></p>
+          </div>
+
+          <div class="field">
+            <label>3 &middot; Build the chain</label>
+            <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
+            <div class="field polymer-only">
+              <label for="repeatRange">Repeats</label>
+              <div class="range-row">
+                <input id="repeatRange" type="range" min="1" max="12" value="4" />
+                <span id="repeatValue">4</span>
               </div>
             </div>
-          </details>
+          </div>
 
-          <div id="importStatus">Template library active.</div>
+          <p class="hint" id="builderStatus"></p>
+        </div>
       </div>
 
       <div id="statusPanel" class="status-panel" hidden>
@@ -838,6 +931,13 @@
         <button id="editToggleBtn" type="button" aria-label="Edit" title="Edit" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M14.7 6.3l3 3M4.5 16.2 15 5.7a1.6 1.6 0 0 1 2.3 0l1 1a1.6 1.6 0 0 1 0 2.3L7.8 19.5l-4 1 1-4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="polymerToggleBtn" type="button" aria-label="Polymer builder" title="Polymer builder" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="6.2" cy="12" r="2.7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="17.8" cy="12" r="2.7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M8.9 12h6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
         </button>
         <button id="statusToggleBtn" type="button" aria-label="Status" title="Status" aria-pressed="false">

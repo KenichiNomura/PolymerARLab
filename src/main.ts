@@ -37,7 +37,6 @@ import {
   combineCondensationMonomers,
   deriveRepeatUnit,
   importStructure,
-  type MonomerSelection,
   type StructureImportFormat,
 } from "./structureImport";
 import { populateTemplateSelect } from "./ui/examples";
@@ -53,15 +52,26 @@ const fallbackEl = document.getElementById("fallbackMolecule")!;
 const videoEl = document.getElementById("cameraFeed") as HTMLVideoElement;
 const arEntryEl = document.getElementById("arEntry")!;
 const polymerSelect = document.getElementById("polymerSelect") as HTMLSelectElement;
-const makePolymerPanel = document.getElementById("makePolymerPanel") as HTMLDetailsElement;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
-const mechanismAddition = document.getElementById("mechanismAddition") as HTMLInputElement;
-const mechanismCondensation = document.getElementById("mechanismCondensation") as HTMLInputElement;
 const mechanismHint = document.getElementById("mechanismHint")!;
-const twoMonomerBtn = document.getElementById("twoMonomerBtn") as HTMLButtonElement;
-const twoMonomerStatus = document.getElementById("twoMonomerStatus") as HTMLElement;
+const polymerPanel = document.getElementById("polymerPanel") as HTMLElement;
+const polymerToggleBtn = document.getElementById("polymerToggleBtn") as HTMLButtonElement;
+const builderChooser = document.getElementById("builderChooser") as HTMLElement;
+const modeAdditionBtn = document.getElementById("modeAdditionBtn") as HTMLButtonElement;
+const modeCondensationBtn = document.getElementById("modeCondensationBtn") as HTMLButtonElement;
+const builderSection = document.getElementById("builderSection") as HTMLElement;
+const builderTitle = document.getElementById("builderTitle")!;
+const builderResetBtn = document.getElementById("builderResetBtn") as HTMLButtonElement;
+const slotToggle = document.getElementById("slotToggle") as HTMLElement;
+const slotABtn = document.getElementById("slotABtn") as HTMLButtonElement;
+const slotBBtn = document.getElementById("slotBBtn") as HTMLButtonElement;
+const builderPubchemInput = document.getElementById("builderPubchemInput") as HTMLInputElement;
+const builderPubchemLoadBtn = document.getElementById("builderPubchemLoadBtn") as HTMLButtonElement;
+const builderSketchBtn = document.getElementById("builderSketchBtn") as HTMLButtonElement;
+const anchorStepLabel = document.getElementById("anchorStepLabel")!;
+const builderStatus = document.getElementById("builderStatus") as HTMLElement;
 const repeatRange = document.getElementById("repeatRange") as HTMLInputElement;
 const repeatValue = document.getElementById("repeatValue")!;
 const labelsToggle = document.getElementById("labelsToggle") as HTMLInputElement;
@@ -96,12 +106,22 @@ let importedTemplate: PolymerTemplate | null = null;
 let currentGraph: MolecularGraph | null = null;
 let three: ThreeRuntime | null = null;
 
-// Two-monomer condensation flow: monomer A is stashed (raw template + anchors
-// for the chemistry, plus its laid-out geometry for the side-by-side preview)
-// while the user loads monomer B, because loading B replaces importedTemplate.
-let pendingMonomerA: MonomerSelection | null = null;
-let monomerADisplay: PolymerTemplate | null = null;
-let pendingMonomerB: PolymerTemplate | null = null;
+// Polymer builder: the student picks a curing mechanism first, then loads
+// monomers into explicit slots (A, plus an optional B for condensation) and
+// picks each slot's anchor atoms. Anchor ids are stored raw (unprefixed); the
+// A_/B_ prefixes exist only inside the side-by-side pair preview.
+type SlotName = "A" | "B";
+interface MonomerSlot {
+  template: PolymerTemplate; // raw chemistry template (pre-layout)
+  display: PolymerTemplate; // laid-out geometry for the pair preview
+  anchorA?: string;
+  anchorB?: string;
+}
+let builder: {
+  mechanism: PolymerMechanism;
+  activeSlot: SlotName;
+  slots: Record<SlotName, MonomerSlot | null>;
+} | null = null;
 // The molecule currently backing the anchor dropdowns (plus an optional atom-id
 // prefix restriction while the A+B pair preview is shown).
 let anchorTemplate: PolymerTemplate | null = null;
@@ -109,8 +129,13 @@ let anchorPrefixFilter: string | null = null;
 let anchorsUsable = false;
 
 function currentMechanism(): PolymerMechanism {
-  return mechanismCondensation.checked ? "condensation" : "addition";
+  return builder?.mechanism ?? "addition";
 }
+
+const MODE_TITLES: Record<PolymerMechanism, string> = {
+  addition: "Addition cure",
+  condensation: "Condensation cure",
+};
 
 const MECHANISM_HINTS: Record<PolymerMechanism, string> = {
   addition:
@@ -119,35 +144,70 @@ const MECHANISM_HINTS: Record<PolymerMechanism, string> = {
     "Pick the -COOH carbon as one anchor and the -OH oxygen (or -NH2 nitrogen) as the other; each new bond releases a water molecule.",
 };
 
-// One primary + one secondary button cover both flows: the primary is
-// "Make repeat unit" normally and becomes "Combine A + B" while a monomer A is
-// staged; the secondary stages/discards monomer A (condensation only).
-function updatePolymerButtons() {
-  const condensation = currentMechanism() === "condensation";
-  const pairing = pendingMonomerA !== null;
-  mechanismHint.textContent = MECHANISM_HINTS[currentMechanism()];
-  makeRepeatUnitBtn.textContent = pairing ? "Combine A + B" : "Make repeat unit";
-  makeRepeatUnitBtn.disabled = !anchorsUsable || (pairing && !pendingMonomerB);
-  twoMonomerBtn.hidden = !condensation || isPolymerMode();
-  twoMonomerBtn.disabled = !pairing && !anchorsUsable;
-  twoMonomerBtn.textContent = pairing ? "✕ Discard monomer A" : "+ Use two monomers (A-A + B-B)";
-  twoMonomerStatus.hidden = !pairing;
-  if (pendingMonomerA) {
-    const name = pendingMonomerA.template.name || "monomer A";
-    twoMonomerStatus.textContent = pendingMonomerB
-      ? `Monomer A: ${name}. Pick monomer B's two anchors, then Combine A + B.`
-      : `Monomer A: ${name}. Load monomer B (PubChem or scan), then pick its anchors.`;
-  }
+function showBuilderStatus(message: string, isError = false) {
+  builderStatus.textContent = message;
+  builderStatus.classList.toggle("is-error", isError);
 }
 
-function onMechanismChange() {
-  // The pair flow is condensation-only; leaving the mechanism dissolves it.
-  if (currentMechanism() === "addition" && pendingMonomerA) {
-    discardMonomerA();
-    return;
+// Entering a mode always starts from a clean scene; a built chain asks first.
+function enterBuilderMode(mechanism: PolymerMechanism) {
+  if (isPolymerMode() && currentGraph) {
+    const ok = window.confirm(`Start a new ${MODE_TITLES[mechanism].toLowerCase()} polymer? The current chain will be cleared.`);
+    if (!ok) return;
   }
-  updatePolymerButtons();
-  if (anchorTemplate) applyAnchorPreselect(anchorTemplate);
+  builder = { mechanism, activeSlot: "A", slots: { A: null, B: null } };
+  setPolymerMode(false);
+  clearMolecule();
+  renderBuilderUi();
+  showBuilderStatus(
+    mechanism === "condensation"
+      ? "Load monomer A - a molecule with -COOH, -OH, or -NH2 ends (try lactic acid or ethylene glycol)."
+      : "Load a monomer with a C=C double bond (try ethylene or styrene).",
+  );
+}
+
+function exitBuilder() {
+  if (isPolymerMode() && currentGraph && !window.confirm("Start over? The current chain will be cleared.")) return;
+  builder = null;
+  setPolymerMode(false);
+  clearMolecule();
+  resetAnchorControls();
+  renderBuilderUi();
+}
+
+function resetAnchorControls() {
+  anchorASelect.replaceChildren();
+  anchorBSelect.replaceChildren();
+  anchorASelect.disabled = true;
+  anchorBSelect.disabled = true;
+  anchorsUsable = false;
+  anchorTemplate = null;
+  anchorPrefixFilter = null;
+}
+
+// Reflect the builder state in the panel: chooser vs numbered steps, slot
+// fill/active markers, per-mechanism hints, and the build button.
+function renderBuilderUi() {
+  builderChooser.hidden = builder !== null;
+  builderSection.hidden = builder === null;
+  if (!builder) return;
+  builderTitle.textContent = MODE_TITLES[builder.mechanism];
+  mechanismHint.textContent = MECHANISM_HINTS[builder.mechanism];
+  slotToggle.hidden = builder.mechanism !== "condensation";
+  const slotLabel = (name: SlotName) => {
+    const slot = builder!.slots[name];
+    const filled = slot ? slot.template.shortName || slot.template.name || "loaded" : "empty";
+    return `${name}: ${filled}`;
+  };
+  slotABtn.textContent = slotLabel("A");
+  slotBBtn.textContent = slotLabel("B");
+  slotABtn.classList.toggle("is-active", builder.activeSlot === "A");
+  slotBBtn.classList.toggle("is-active", builder.activeSlot === "B");
+  anchorStepLabel.textContent =
+    builder.mechanism === "condensation" ? `2 · Pick monomer ${builder.activeSlot}'s two anchor atoms` : "2 · Pick the two anchor atoms";
+  makeRepeatUnitBtn.textContent =
+    builder.mechanism === "condensation" && builder.slots.A && builder.slots.B ? "Make repeat unit (combine A + B)" : "Make repeat unit";
+  makeRepeatUnitBtn.disabled = !builder.slots.A || !anchorsUsable;
 }
 
 // Polymer mode is entered programmatically (deriving a repeat unit or choosing a
@@ -167,9 +227,7 @@ function updateStructureModeUi() {
   const polymerMode = isPolymerMode();
   document.body.classList.toggle("polymer-mode", polymerMode);
   repeatRange.disabled = !polymerMode;
-  // Reveal the Repeats control (now inside this panel) whenever a polymer is active.
-  if (polymerMode) makePolymerPanel.open = true;
-  updatePolymerButtons();
+  renderBuilderUi();
 }
 
 function getActiveTemplate(id: string): PolymerTemplate {
@@ -252,6 +310,16 @@ function clearMolecule() {
   scanPreview.classList.remove("has-capture");
   scanPreview.style.backgroundImage = "";
   quickLook.scheduleRefresh();
+  // Clearing while the builder is open empties the monomer slots but keeps the
+  // chosen mechanism, so the student can reload without starting over.
+  if (builder) {
+    builder.slots = { A: null, B: null };
+    builder.activeSlot = "A";
+    setPolymerMode(false);
+    resetAnchorControls();
+    renderBuilderUi();
+    showBuilderStatus("Cleared. Load a monomer to continue.");
+  }
   showStatus("Cleared the current structure.");
 }
 
@@ -310,8 +378,7 @@ async function loadImportedStructure(
     polymerSelect.value = IMPORTED_TEMPLATE_ID;
     repeatRange.value = String(importedTemplate.defaultRepeats);
     rebuildGraph();
-    populateAnchorControls(importedTemplate);
-    maybeEnterPairPreview();
+    onStructureLoaded();
     const [importedMessage, ...importWarnings] = result.messages;
     const countsMessage = `${importedMessage} ${importedTemplate.atoms.length} atoms, ${importedTemplate.bonds.length} bonds.`;
     showImportStatus([...normalized.messages, countsMessage, ...importWarnings].join(" "));
@@ -366,8 +433,7 @@ function showImportedTemplate(template: PolymerTemplate, statusMessage: string) 
   polymerSelect.value = IMPORTED_TEMPLATE_ID;
   repeatRange.value = "1";
   rebuildGraph();
-  populateAnchorControls(template);
-  maybeEnterPairPreview();
+  onStructureLoaded();
   showStatus(statusMessage);
 }
 
@@ -388,7 +454,7 @@ function populateAnchorControls(template: PolymerTemplate, options: { onlyPrefix
   anchorBSelect.disabled = !anchorsUsable;
   anchorTemplate = anchorsUsable ? template : null;
   anchorPrefixFilter = options.onlyPrefix ?? null;
-  updatePolymerButtons();
+  renderBuilderUi();
   if (!anchorsUsable) return;
 
   for (const atom of heavy) {
@@ -472,30 +538,126 @@ function anchorOption(atomId: string, label: string) {
   return option;
 }
 
+// Route a freshly loaded structure: plain molecule browsing shows it directly;
+// with the builder open it also fills the active monomer slot.
+function onStructureLoaded() {
+  if (!builder || !importedTemplate) return;
+  const raw = importedTemplate;
+  builder.slots[builder.activeSlot] = { template: raw, display: currentTemplate };
+  refreshBuilderView();
+  const name = raw.name || raw.shortName || "molecule";
+  showBuilderStatus(
+    builder.mechanism === "condensation" && builder.activeSlot === "A" && !builder.slots.B
+      ? `Monomer A: ${name}. Check its two anchor picks - or switch to slot B to add a second monomer.`
+      : `Monomer ${builder.activeSlot}: ${name}. Check the anchor picks, then press Make repeat unit.`,
+  );
+}
+
+// Show the builder's monomer(s): a single filled slot renders alone; both
+// filled render stacked with A/B tags. The anchor dropdowns always follow the
+// active slot (prefix-filtered inside the merged pair preview).
+function refreshBuilderView() {
+  if (!builder) return;
+  // Editing slots always happens on the monomer preview, not the built chain
+  // (a preview template must never tile through generatePolymerGraph).
+  if (isPolymerMode()) setPolymerMode(false);
+  const { A, B } = builder.slots;
+  const active = builder.slots[builder.activeSlot];
+  if (A && B) {
+    const preview = buildMonomerPairPreview(A.display, B.display);
+    importedTemplate = preview;
+    importedTemplateOption.hidden = false;
+    importedTemplateOption.textContent = `${preview.shortName} - ${preview.name}`;
+    polymerSelect.value = IMPORTED_TEMPLATE_ID;
+    rebuildGraph();
+    populateAnchorControls(preview, { onlyPrefix: `${builder.activeSlot}_` });
+  } else if (active) {
+    importedTemplate = active.template;
+    importedTemplateOption.hidden = false;
+    importedTemplateOption.textContent = `${active.template.shortName} - ${active.template.name}`;
+    polymerSelect.value = IMPORTED_TEMPLATE_ID;
+    rebuildGraph();
+    populateAnchorControls(active.template);
+  } else {
+    resetAnchorControls();
+  }
+  restoreSlotAnchors();
+  renderBuilderUi();
+}
+
+// Anchor picks are stored raw per slot; the dropdowns carry A_/B_ prefixes only
+// while the merged pair preview is shown.
+function saveActiveSlotAnchors() {
+  if (!builder || !anchorsUsable) return;
+  const slot = builder.slots[builder.activeSlot];
+  if (!slot) return;
+  slot.anchorA = anchorASelect.value.replace(/^[AB]_/, "");
+  slot.anchorB = anchorBSelect.value.replace(/^[AB]_/, "");
+}
+
+function restoreSlotAnchors() {
+  if (!builder || !anchorsUsable) return;
+  const slot = builder.slots[builder.activeSlot];
+  if (!slot?.anchorA || !slot.anchorB) return;
+  const prefix = anchorPrefixFilter ?? "";
+  const a = `${prefix}${slot.anchorA}`;
+  const b = `${prefix}${slot.anchorB}`;
+  if ([...anchorASelect.options].some((option) => option.value === a)) anchorASelect.value = a;
+  if ([...anchorBSelect.options].some((option) => option.value === b)) anchorBSelect.value = b;
+}
+
+function setActiveSlot(name: SlotName) {
+  if (!builder || builder.activeSlot === name) return;
+  saveActiveSlotAnchors();
+  builder.activeSlot = name;
+  refreshBuilderView();
+  const slot = builder.slots[name];
+  showBuilderStatus(
+    slot
+      ? `Monomer ${name}: ${slot.template.name}. Check its two anchor picks.`
+      : `Slot ${name} is empty - load a molecule for monomer ${name}.`,
+  );
+}
+
+// One button covers every flow: addition, single-monomer condensation, and the
+// two-monomer A+B combine. Bad anchor picks surface the validation message.
 function makeRepeatUnit() {
-  if (!importedTemplate) {
-    showImportStatus("Load a molecule first, then choose two backbone atoms.");
+  if (!builder) return;
+  saveActiveSlotAnchors();
+  const { A, B } = builder.slots;
+  if (!A?.anchorA || !A.anchorB) {
+    showBuilderStatus("Load monomer A first, then pick its two anchor atoms.", true);
     return;
   }
   try {
-    const mechanism = currentMechanism();
-    const derived = deriveRepeatUnit(importedTemplate, anchorASelect.value, anchorBSelect.value, { mechanism });
+    let derived: PolymerTemplate;
+    if (builder.mechanism === "condensation" && B) {
+      if (!B.anchorA || !B.anchorB) throw new Error("Pick monomer B's two anchor atoms (switch to slot B).");
+      assertCondensationAnchors(A.template, A.anchorA, A.anchorB);
+      assertCondensationAnchors(B.template, B.anchorA, B.anchorB);
+      derived = combineCondensationMonomers(
+        { template: A.template, anchorA: A.anchorA, anchorB: A.anchorB },
+        { template: B.template, anchorA: B.anchorA, anchorB: B.anchorB },
+      );
+    } else {
+      derived = deriveRepeatUnit(A.template, A.anchorA, A.anchorB, { mechanism: builder.mechanism });
+    }
     activatePolymerTemplate(derived);
-    showImportStatus(`Repeat unit from ${anchorASelect.value}-${anchorBSelect.value}: ${derived.name}.`);
+    showBuilderStatus(`${derived.name} - drag Repeats to grow the chain.`);
     showStatus(
-      mechanism === "condensation"
-        ? "Polymer repeat unit derived; each new link releases one H2O. Adjust Repeats to grow the chain."
-        : "Polymer repeat unit derived; adjust Repeats or re-pick the connection atoms.",
+      builder.mechanism === "condensation"
+        ? "Polymer built; every new bond releases one H2O. Adjust Repeats to grow the chain."
+        : "Polymer built; adjust Repeats to grow the chain.",
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    showImportStatus(message);
-    showStatus(`Could not derive a repeat unit: ${message}`, true);
+    showBuilderStatus(message, true);
+    showStatus(`Could not build the polymer: ${message}`, true);
   }
 }
 
-// Shared tail of makeRepeatUnit / combineMonomers: install the derived repeat
-// unit as the imported template and rebuild in polymer mode.
+// Shared tail of every build: install the derived repeat unit as the imported
+// template and rebuild in polymer mode.
 function activatePolymerTemplate(derived: PolymerTemplate) {
   setPolymerMode(true);
   importedTemplate = derived;
@@ -509,104 +671,17 @@ function activatePolymerTemplate(derived: PolymerTemplate) {
   rebuildGraph();
 }
 
-// Stage the current molecule as monomer A: keep its raw template + anchors for
-// the chemistry and its laid-out geometry for the side-by-side preview.
-function useTwoMonomers() {
-  if (!importedTemplate) {
-    showImportStatus("Load monomer A first (PubChem, scan, or example), then pick its two anchors.");
-    return;
-  }
-  // Students pick monomer A's two anchors themselves; reject unusable picks
-  // now, with a readable message, rather than later at Combine.
-  try {
-    assertCondensationAnchors(importedTemplate, anchorASelect.value, anchorBSelect.value);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    showImportStatus(message);
-    showStatus(`Check monomer A's anchors: ${message}`, true);
-    return;
-  }
-  pendingMonomerA = { template: importedTemplate, anchorA: anchorASelect.value, anchorB: anchorBSelect.value };
-  monomerADisplay = currentTemplate;
-  pendingMonomerB = null;
-  updatePolymerButtons();
-  const name = importedTemplate.name || "monomer A";
-  const labelA = anchorASelect.selectedOptions[0]?.textContent ?? anchorASelect.value;
-  const labelB = anchorBSelect.selectedOptions[0]?.textContent ?? anchorBSelect.value;
-  // Replace any earlier validation error still shown in the import status line.
-  showImportStatus(`Monomer A set: ${name} (anchors ${labelA}, ${labelB}). Now load monomer B.`);
-  showStatus(`Monomer A set: ${name}. Load monomer B next.`);
-}
-
-function discardMonomerA() {
-  const restore = pendingMonomerB;
-  pendingMonomerA = null;
-  monomerADisplay = null;
-  pendingMonomerB = null;
-  if (restore) {
-    // The screen shows the A+B pair preview; go back to monomer B alone.
-    importedTemplate = restore;
-    importedTemplateOption.textContent = `${restore.shortName} - ${restore.name}`;
-    rebuildGraph();
-    populateAnchorControls(restore);
-  } else {
-    updatePolymerButtons();
-  }
-  showImportStatus("Monomer A discarded.");
-  showStatus("Monomer A discarded.");
-}
-
-// Called after every structure load: while a monomer A is staged (condensation),
-// the freshly loaded molecule becomes monomer B and both render side by side —
-// A left, B right, "A"/"B" tags — before the user commits to Combine.
-function maybeEnterPairPreview() {
-  if (!pendingMonomerA || !monomerADisplay || !importedTemplate) return;
-  if (currentMechanism() !== "condensation") return;
-  pendingMonomerB = importedTemplate;
-  const preview = buildMonomerPairPreview(monomerADisplay, currentTemplate);
-  importedTemplate = preview;
-  importedTemplateOption.textContent = `${preview.shortName} - ${preview.name}`;
-  polymerSelect.value = IMPORTED_TEMPLATE_ID;
-  rebuildGraph();
-  populateAnchorControls(preview, { onlyPrefix: "B_" });
-  showStatus("Monomer B loaded. Pick its two anchors (right molecule), then Combine A + B.");
-}
-
-function combineMonomers() {
-  if (!pendingMonomerA || !pendingMonomerB) {
-    showImportStatus("Load monomer B first, then Combine.");
-    return;
-  }
-  try {
-    // Anchor values come from the pair preview, where B's atom ids are prefixed.
-    const combined = combineCondensationMonomers(pendingMonomerA, {
-      template: pendingMonomerB,
-      anchorA: anchorASelect.value.replace(/^B_/, ""),
-      anchorB: anchorBSelect.value.replace(/^B_/, ""),
-    });
-    activatePolymerTemplate(combined);
-    pendingMonomerA = null;
-    monomerADisplay = null;
-    pendingMonomerB = null;
-    updatePolymerButtons();
-    showImportStatus(`Combined repeat unit: ${combined.name}.`);
-    showStatus("Monomers combined; every ester/amide bond releases one H2O. Adjust Repeats to grow the chain.");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    showImportStatus(message);
-    showStatus(`Could not combine the monomers: ${message}`, true);
-  }
-}
-
 // Fetch a molecule from PubChem by CID or name and render it with PubChem's own
-// 3D coordinates (see buildMoleculeTemplate3D / explicitGeometry).
-async function loadFromPubChem() {
-  const query = pubchemInput.value.trim();
+// 3D coordinates (see buildMoleculeTemplate3D / explicitGeometry). Both the
+// Edit panel and the polymer builder feed their input value through here.
+async function loadFromPubChem(query: string) {
+  query = query.trim();
   if (!query) {
     showImportStatus("Enter a PubChem name or CID.");
     return;
   }
   pubchemLoadBtn.disabled = true;
+  builderPubchemLoadBtn.disabled = true;
   showImportStatus(`Looking up "${query}" on PubChem...`);
   try {
     const cid = await resolveCid(query);
@@ -624,6 +699,7 @@ async function loadFromPubChem() {
     showStatus(`PubChem load failed: ${message}`, true);
   } finally {
     pubchemLoadBtn.disabled = false;
+    builderPubchemLoadBtn.disabled = false;
   }
 }
 
@@ -764,18 +840,30 @@ polymerSelect.addEventListener("change", () => {
 });
 
 pubchemLoadBtn.addEventListener("click", () => {
-  void loadFromPubChem();
+  void loadFromPubChem(pubchemInput.value);
 });
 pubchemInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    void loadFromPubChem();
+    void loadFromPubChem(pubchemInput.value);
   }
 });
-makeRepeatUnitBtn.addEventListener("click", () => (pendingMonomerA ? combineMonomers() : makeRepeatUnit()));
-twoMonomerBtn.addEventListener("click", () => (pendingMonomerA ? discardMonomerA() : useTwoMonomers()));
-mechanismAddition.addEventListener("change", onMechanismChange);
-mechanismCondensation.addEventListener("change", onMechanismChange);
+builderPubchemLoadBtn.addEventListener("click", () => {
+  void loadFromPubChem(builderPubchemInput.value);
+});
+builderPubchemInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadFromPubChem(builderPubchemInput.value);
+  }
+});
+builderSketchBtn.addEventListener("click", () => sketchFileInput.click());
+makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
+modeAdditionBtn.addEventListener("click", () => enterBuilderMode("addition"));
+modeCondensationBtn.addEventListener("click", () => enterBuilderMode("condensation"));
+builderResetBtn.addEventListener("click", exitBuilder);
+slotABtn.addEventListener("click", () => setActiveSlot("A"));
+slotBBtn.addEventListener("click", () => setActiveSlot("B"));
 saveLammpsBtn.addEventListener("click", saveLammps);
 repeatRange.addEventListener("input", rebuildGraph);
 
@@ -831,6 +919,7 @@ function togglePanel(panel: HTMLElement, button: HTMLButtonElement) {
 }
 statusToggleBtn.addEventListener("click", () => togglePanel(statusPanel, statusToggleBtn));
 editToggleBtn.addEventListener("click", () => togglePanel(editPanel, editToggleBtn));
+polymerToggleBtn.addEventListener("click", () => togglePanel(polymerPanel, polymerToggleBtn));
 tutorialBtn.addEventListener("click", () => window.open("tutorial.html", "_blank", "noopener"));
 arQuickLookBtn.addEventListener("click", () => {
   // An active camera stream holds the camera hardware that iOS AR Quick Look

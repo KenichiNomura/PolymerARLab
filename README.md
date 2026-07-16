@@ -29,9 +29,11 @@
 - **Reset view** — recenters the molecule if it drifts off screen.
 - **Clear** — removes the molecule so you can start over.
 - **AR View** — (on iPhone/iPad) places the molecule in the real world.
-- **Edit** ✏️ — opens the main panel (scan, look up molecules, build polymers, save files).
+- **Edit** ✏️ — opens the molecule panel (scan a sketch, look up molecules, toggle labels).
+- **Polymer** 🔗 — opens the polymer builder (choose a curing mechanism, load monomers, grow a chain).
 - **Status** ⓘ — shows how many atoms and bonds the molecule has.
 - **Tutorial** 📖 — opens the picture guide.
+- **Save** ⬇ — downloads the LAMMPS files for the current structure.
 
 ---
 
@@ -57,17 +59,17 @@
 
 <img src="docs/images/monomer-to-polymer.svg" alt="Start from a monomer, pick its two backbone atoms, the double bond opens, and the unit repeats into a chain" width="100%">
 
-1. **Look up a small molecule (a "monomer").** In **Edit**, type a name or number in the **PubChem** box — try `ethylene` or `styrene` — and press **Load**.
-2. Turn on **Atom labels** so every atom shows its name (C1, C2, …).
-3. Open **"Make Polymer from Monomer"**, pick the **two backbone atoms** (for these, the two carbons of the double bond), and press **Make repeat unit**. The molecule copies itself into a chain.
+1. **Open the polymer builder.** Tap the **Polymer** 🔗 icon in the bottom-left dock and choose how your polymer cures: **Addition cure** (opens a C=C double bond) or **Condensation cure** (each new bond releases one H₂O). The screen clears so you start fresh.
+2. **Load a monomer.** Type a name in the panel's **PubChem** box — try `ethylene` or `styrene` for addition — and press **Load**. Turn on **Atom labels** (in **Edit**) so every atom shows its name (C1, C2, …).
+3. **Pick the two anchor atoms** — where the chain will connect (for a vinyl monomer, the two carbons of the double bond) — and press **Make repeat unit**. The molecule copies itself into a chain.
 4. Drag the **Repeats** slider to make the chain longer or shorter.
 
 **Condensation polymers (they release water!):** some real polymers — polyesters like PET, nylons, proteins — form by *condensation*: every new bond squeezes out one H₂O molecule. To try it:
 
-1. Load a monomer with the right ends, e.g. `lactic acid`.
-2. In **"Make Polymer from Monomer"**, choose **Condensation (releases H2O)**. The app suggests the −COOH carbon and the −OH oxygen as anchors (you can re-pick them).
+1. In the polymer builder, choose **Condensation cure** and load a monomer with the right ends, e.g. `lactic acid`.
+2. The app suggests the −COOH carbon and the −OH oxygen as anchors (you can re-pick them; a wrong pick shows an error explaining what can react).
 3. Press **Make repeat unit** — the chain forms and little **water molecules float away from every new bond**. The Status panel counts them (`releases n−1 H2O`).
-4. For polymers made from **two different monomers**: load the first one (try `ethylene glycol`), pick its two −OH oxygens, and press **+ Use two monomers (A-A + B-B)**. Then load the second (`terephthalic acid`) — **both molecules appear side by side**, labelled **A** and **B**. Pick B's two −COOH carbons and press **Combine A + B** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
+4. For polymers made from **two different monomers**: load the first (try `ethylene glycol`) into slot **A** and pick its two −OH oxygens. Tap slot **B** and load the second (`terephthalic acid`) — **both molecules appear on screen**, labelled **A** and **B**. Pick B's two −COOH carbons and press **Make repeat unit (combine A + B)** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
 5. Press the **Save LAMMPS (UFF)** download icon in the bottom-left dock. It downloads two files: `<name>.data` (the molecule) and `in.relax` (the instructions).
 6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the movie of it moving (`.min.xyz`, `.nvt.xyz`) and the final shape (`.relaxed.data`).
 
