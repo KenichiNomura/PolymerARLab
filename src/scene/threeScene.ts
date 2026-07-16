@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { ByproductAnimator } from "../byproductAnimation";
 import { GraphMoleculeRenderer } from "../graphMoleculeRenderer";
 
 // Desktop/mobile 3D preview scene: renderer, camera, lights, grid, and the
@@ -12,6 +13,7 @@ export interface ThreeRuntime {
   controls: OrbitControls;
   moleculeRoot: THREE.Group;
   moleculeRenderer: GraphMoleculeRenderer;
+  byproductAnimator: ByproductAnimator;
   reticle: THREE.Mesh;
   grid: THREE.GridHelper;
   arHitTestSource: XRHitTestSource | null;
@@ -58,6 +60,11 @@ export function initThreeRuntime(container: HTMLElement, onFailure: (message: st
     const moleculeRenderer = new GraphMoleculeRenderer();
     moleculeRoot.add(moleculeRenderer.group);
 
+    // Byproduct waters render alongside the molecule but outside its renderer
+    // group, so USDZ export (which clones moleculeRenderer.group) excludes them.
+    const byproductAnimator = new ByproductAnimator();
+    moleculeRoot.add(byproductAnimator.group);
+
     const reticle = new THREE.Mesh(
       new THREE.RingGeometry(0.18, 0.23, 48).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: 0x8fe3d0, transparent: true, opacity: 0.86 }),
@@ -87,6 +94,7 @@ export function initThreeRuntime(container: HTMLElement, onFailure: (message: st
       controls,
       moleculeRoot,
       moleculeRenderer,
+      byproductAnimator,
       reticle,
       grid,
       arHitTestSource: null,
@@ -126,6 +134,9 @@ export function startRenderLoop(runtime: ThreeRuntime) {
     } else {
       runtime.moleculeRoot.rotation.y += 0.0015;
     }
+
+    // Drives the condensation H2O release tweens in both preview and AR.
+    runtime.byproductAnimator.update(performance.now());
 
     runtime.renderer.render(runtime.scene, runtime.camera);
   });

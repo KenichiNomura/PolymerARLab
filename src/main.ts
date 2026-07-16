@@ -217,7 +217,10 @@ function rebuildGraph() {
 // shown rather than permanently disabling the app.
 function clearMolecule() {
   currentGraph = null;
-  if (three) three.moleculeRoot.visible = false;
+  if (three) {
+    three.moleculeRoot.visible = false;
+    three.byproductAnimator.sync(null, three.moleculeRenderer);
+  }
   fallbackEl.innerHTML = "";
   structureSummary.textContent = "No structure loaded.";
   validationStatus.textContent = "";
@@ -231,6 +234,7 @@ function updateThreeGraph() {
   if (!three || !currentGraph) return;
   three.moleculeRenderer.setGraph(currentGraph);
   three.moleculeRenderer.setLabelsVisible(labelsToggle.checked);
+  three.byproductAnimator.sync(currentGraph, three.moleculeRenderer);
   three.moleculeRoot.visible = true;
   if (three.renderer.xr.isPresenting) {
     three.moleculeRoot.scale.setScalar(0.18);
