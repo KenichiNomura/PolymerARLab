@@ -530,7 +530,12 @@ function useTwoMonomers() {
   monomerADisplay = currentTemplate;
   pendingMonomerB = null;
   updatePolymerButtons();
-  showStatus(`Monomer A set: ${importedTemplate.name || "monomer A"}. Load monomer B next.`);
+  const name = importedTemplate.name || "monomer A";
+  const labelA = anchorASelect.selectedOptions[0]?.textContent ?? anchorASelect.value;
+  const labelB = anchorBSelect.selectedOptions[0]?.textContent ?? anchorBSelect.value;
+  // Replace any earlier validation error still shown in the import status line.
+  showImportStatus(`Monomer A set: ${name} (anchors ${labelA}, ${labelB}). Now load monomer B.`);
+  showStatus(`Monomer A set: ${name}. Load monomer B next.`);
 }
 
 function discardMonomerA() {
@@ -547,6 +552,7 @@ function discardMonomerA() {
   } else {
     updatePolymerButtons();
   }
+  showImportStatus("Monomer A discarded.");
   showStatus("Monomer A discarded.");
 }
 
