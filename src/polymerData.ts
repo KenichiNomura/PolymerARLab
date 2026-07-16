@@ -1,6 +1,30 @@
 export type AtomSymbol = "H" | "C" | "N" | "O" | "S" | "P" | "F" | "Cl" | "Br" | "I";
 export type BondOrder = 1 | 2 | 3 | "aromatic";
 
+/** How monomers join: addition opens a multiple bond; condensation expels a
+ *  small byproduct molecule (water) each time a link bond forms. */
+export type PolymerMechanism = "addition" | "condensation";
+
+export interface ByproductInfo {
+  formula: "H2O";
+  label: string;
+}
+
+/** What a chain-end anchor regains when capped: a plain hydrogen, or a full
+ *  hydroxyl for a condensation acid carbon (so the end reads -COOH, not -CHO). */
+export type ChainCapKind = "H" | "OH";
+
+/** One byproduct molecule released by a formed link bond, referencing the two
+ *  graph atoms it departed from. Metadata only — never part of atoms/bonds, so
+ *  exports (LAMMPS, USDZ) stay byproduct-free by construction. */
+export interface ByproductSite {
+  id: string;
+  atomA: string;
+  atomB: string;
+  unit: number;
+  formula: "H2O";
+}
+
 export interface TemplateAtom {
   id: string;
   element: AtomSymbol;
@@ -36,7 +60,17 @@ export interface PolymerTemplate {
     leftAtomId: string;
     rightAtomId: string;
     order: BondOrder;
+    /** Defaults to "addition" (no byproduct). */
+    mechanism?: PolymerMechanism;
+    /** Released once per inter-unit link when mechanism is "condensation". */
+    byproduct?: ByproductInfo;
+    /** Chain-end caps; default "H". "OH" restores a condensation acid end. */
+    leftCap?: ChainCapKind;
+    rightCap?: ChainCapKind;
   };
+  /** Template bonds that already released a byproduct when the unit was built
+   *  (the internal A-B bond of a merged two-monomer condensation unit). */
+  byproductSites?: Array<{ bondId: string; byproduct: ByproductInfo }>;
   atoms: TemplateAtom[];
   bonds: TemplateBond[];
   groups: TemplateGroup[];
@@ -82,6 +116,8 @@ export interface MolecularGraph {
   bonds: GraphBond[];
   groups: GraphGroup[];
   warnings: string[];
+  /** Water molecules released while forming this chain (condensation only). */
+  byproducts: ByproductSite[];
 }
 
 function atom(id: string, element: AtomSymbol, x: number, y: number, z = 0, label?: string): TemplateAtom {
@@ -351,9 +387,11 @@ export function generatePolymerGraph(
   const atoms: GraphAtom[] = [];
   const bonds: GraphBond[] = [];
   const groups: GraphGroup[] = [];
+  const byproducts: ByproductSite[] = [];
   const atomByTemplateAndUnit = new Map<string, GraphAtom>();
   const labels = elementLabels(template.atoms);
   const twist = template.twist ?? Math.PI;
+  const templateBondById = new Map(template.bonds.map((templateBond) => [templateBond.id, templateBond]));
 
   for (let unit = 0; unit < safeRepeats; unit++) {
     const unitBase = scaleVec(template.step, unit);
@@ -396,6 +434,20 @@ export function generatePolymerGraph(
       });
     }
 
+    // Internal condensation bonds (merged two-monomer units) released one
+    // byproduct when the unit itself was assembled — one site per unit.
+    for (const site of template.byproductSites ?? []) {
+      const templateBond = templateBondById.get(site.bondId);
+      if (!templateBond) continue;
+      byproducts.push({
+        id: `internal:${site.bondId}:${unit}`,
+        atomA: `${templateBond.a}:${unit}`,
+        atomB: `${templateBond.b}:${unit}`,
+        unit,
+        formula: site.byproduct.formula,
+      });
+    }
+
     if (unit > 0) {
       bonds.push({
         id: `repeat-link:${unit - 1}-${unit}`,
@@ -405,6 +457,15 @@ export function generatePolymerGraph(
         order: template.connection.order,
         unit,
       });
+      if (template.connection.mechanism === "condensation") {
+        byproducts.push({
+          id: `link:${unit - 1}-${unit}`,
+          atomA: `${template.connection.rightAtomId}:${unit - 1}`,
+          atomB: `${template.connection.leftAtomId}:${unit}`,
+          unit,
+          formula: template.connection.byproduct?.formula ?? "H2O",
+        });
+      }
     }
   }
 
@@ -413,8 +474,15 @@ export function generatePolymerGraph(
   // the very first left anchor and last right anchor are open; every other
   // anchor is satisfied by a repeat-link bond.
   if (options.capChainEnds) {
-    capChainEnd(atoms, bonds, atomByTemplateAndUnit, `${template.connection.leftAtomId}:0`, -1);
-    capChainEnd(atoms, bonds, atomByTemplateAndUnit, `${template.connection.rightAtomId}:${safeRepeats - 1}`, 1);
+    capChainEnd(atoms, bonds, atomByTemplateAndUnit, `${template.connection.leftAtomId}:0`, -1, template.connection.leftCap ?? "H");
+    capChainEnd(
+      atoms,
+      bonds,
+      atomByTemplateAndUnit,
+      `${template.connection.rightAtomId}:${safeRepeats - 1}`,
+      1,
+      template.connection.rightCap ?? "H",
+    );
   }
 
   return {
@@ -425,13 +493,18 @@ export function generatePolymerGraph(
     bonds,
     groups,
     warnings: validateGraph(atoms, bonds),
+    byproducts,
   };
 }
 
-// Adds one hydrogen to a chain-end anchor, placed along the atom's open valence
+// Caps a chain-end anchor's open valence, placed along the atom's open valence
 // (opposite the average direction of its existing neighbors). `fallbackSign`
-// aims the cap along the chain axis (+/-x) if the neighbor geometry is degenerate.
+// aims the cap along the chain axis (+/-x) if the neighbor geometry is
+// degenerate. Cap kinds: "H" adds one hydrogen; "OH" adds a hydroxyl so a
+// condensation acid carbon reads -COOH again instead of an aldehyde.
 const CHAIN_CAP_BOND = 1.09;
+const CHAIN_CAP_CO_BOND = 1.36;
+const CHAIN_CAP_OH_BOND = 0.96;
 
 function capChainEnd(
   atoms: GraphAtom[],
@@ -439,6 +512,7 @@ function capChainEnd(
   atomById: Map<string, GraphAtom>,
   anchorId: string,
   fallbackSign: 1 | -1,
+  kind: ChainCapKind,
 ) {
   const anchor = atomById.get(anchorId);
   if (!anchor) return;
@@ -468,14 +542,48 @@ function capChainEnd(
     dir = [fallbackSign, 0, 0];
     length = 1;
   }
-  const capPosition: [number, number, number] = [
-    anchor.position[0] + (dir[0] / length) * CHAIN_CAP_BOND,
-    anchor.position[1] + (dir[1] / length) * CHAIN_CAP_BOND,
-    anchor.position[2] + (dir[2] / length) * CHAIN_CAP_BOND,
+  const unitDir: [number, number, number] = [dir[0] / length, dir[1] / length, dir[2] / length];
+
+  if (kind === "H") {
+    const capPosition: [number, number, number] = [
+      anchor.position[0] + unitDir[0] * CHAIN_CAP_BOND,
+      anchor.position[1] + unitDir[1] * CHAIN_CAP_BOND,
+      anchor.position[2] + unitDir[2] * CHAIN_CAP_BOND,
+    ];
+    const capId = `cap:${anchorId}`;
+    atoms.push({ id: capId, templateAtomId: "chain-cap", element: "H", position: capPosition, unit: anchor.unit, label: "H" });
+    bonds.push({ id: `capbond:${anchorId}`, templateBondId: "chain-cap", a: anchorId, b: capId, order: 1, unit: anchor.unit });
+    return;
+  }
+
+  // "OH": oxygen along the open valence, hydrogen bent off the C-O axis so the
+  // C-O-H angle is roughly tetrahedral rather than linear.
+  const oxygenPosition: [number, number, number] = [
+    anchor.position[0] + unitDir[0] * CHAIN_CAP_CO_BOND,
+    anchor.position[1] + unitDir[1] * CHAIN_CAP_CO_BOND,
+    anchor.position[2] + unitDir[2] * CHAIN_CAP_CO_BOND,
   ];
-  const capId = `cap:${anchorId}`;
-  atoms.push({ id: capId, templateAtomId: "chain-cap", element: "H", position: capPosition, unit: anchor.unit, label: "H" });
-  bonds.push({ id: `capbond:${anchorId}`, templateBondId: "chain-cap", a: anchorId, b: capId, order: 1, unit: anchor.unit });
+  const helper: [number, number, number] = Math.abs(unitDir[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let perp: [number, number, number] = [
+    unitDir[1] * helper[2] - unitDir[2] * helper[1],
+    unitDir[2] * helper[0] - unitDir[0] * helper[2],
+    unitDir[0] * helper[1] - unitDir[1] * helper[0],
+  ];
+  const perpLength = Math.hypot(perp[0], perp[1], perp[2]) || 1;
+  perp = [perp[0] / perpLength, perp[1] / perpLength, perp[2] / perpLength];
+  const bend = Math.cos(Math.PI * 0.39); // ~109deg C-O-H
+  const rise = Math.sin(Math.PI * 0.39);
+  const hydrogenPosition: [number, number, number] = [
+    oxygenPosition[0] + (unitDir[0] * bend + perp[0] * rise) * CHAIN_CAP_OH_BOND,
+    oxygenPosition[1] + (unitDir[1] * bend + perp[1] * rise) * CHAIN_CAP_OH_BOND,
+    oxygenPosition[2] + (unitDir[2] * bend + perp[2] * rise) * CHAIN_CAP_OH_BOND,
+  ];
+  const oxygenId = `cap:${anchorId}`;
+  const hydrogenId = `caph:${anchorId}`;
+  atoms.push({ id: oxygenId, templateAtomId: "chain-cap", element: "O", position: oxygenPosition, unit: anchor.unit, label: "O" });
+  atoms.push({ id: hydrogenId, templateAtomId: "chain-cap", element: "H", position: hydrogenPosition, unit: anchor.unit, label: "H" });
+  bonds.push({ id: `capbond:${anchorId}`, templateBondId: "chain-cap", a: anchorId, b: oxygenId, order: 1, unit: anchor.unit });
+  bonds.push({ id: `capbond-h:${anchorId}`, templateBondId: "chain-cap", a: oxygenId, b: hydrogenId, order: 1, unit: anchor.unit });
 }
 
 export function summarizeBondOrders(graph: MolecularGraph): Record<string, number> {
