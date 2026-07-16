@@ -139,6 +139,15 @@ export class GraphMoleculeRenderer {
       this.addAtom(graphAtom, highlightedAtoms.has(graphAtom.id));
     }
 
+    // Caption sprites (e.g. "A"/"B" over the monomer pair preview). They live
+    // in the main group, not this.labels, so hiding atom labels keeps them.
+    for (const tag of this.graph.tags ?? []) {
+      const sprite = new THREE.Sprite(this.spriteMaterial(tag.label));
+      sprite.position.fromArray(tag.position);
+      sprite.scale.set(2.0, 1.0, 1);
+      this.group.add(sprite);
+    }
+
     this.center();
     this.labels.visible = this.labelsVisible;
   }

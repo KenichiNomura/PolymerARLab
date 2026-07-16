@@ -4,6 +4,7 @@ import type {
   ByproductInfo,
   PolymerMechanism,
   PolymerTemplate,
+  SceneTag,
   TemplateAtom,
   TemplateBond,
   TemplateGroup,
@@ -298,6 +299,85 @@ export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelec
         color: 0x44c7d8,
       },
     ],
+  };
+}
+
+// Display-only merge of two already-laid-out monomers: A floats above B with a
+// clear gap and "A"/"B" caption tags (vertical stacking fits the fixed preview
+// camera; molecules are typically long along x, so side-by-side pushes one
+// off-screen). explicitGeometry skips the conformer (two disconnected fragments
+// must never reach openchemlib), so the input coordinates are shown as-is.
+// Anchor ids gain the same A_/B_ prefixes the combine step uses; atom labels
+// are numbered across the merged list, so A's labels match what the user saw
+// when picking A's anchors.
+export function buildMonomerPairPreview(aDisplay: PolymerTemplate, bDisplay: PolymerTemplate): PolymerTemplate {
+  const GAP = 3;
+  const partA = prefixAllAtoms(aDisplay, "A");
+  const partB = prefixAllAtoms(bDisplay, "B");
+
+  // Center each monomer on the origin, then lift A above the gap and sink B
+  // below it.
+  const centerPart = (atoms: TemplateAtom[]) => {
+    for (const axis of [0, 1, 2] as const) {
+      const values = atoms.map((atom) => atom.position[axis]);
+      const mid = (Math.min(...values) + Math.max(...values)) / 2;
+      for (const atom of atoms) atom.position[axis] -= mid;
+    }
+  };
+  const shiftY = (atoms: TemplateAtom[], dy: number) => {
+    for (const atom of atoms) atom.position[1] += dy;
+  };
+  const height = (atoms: TemplateAtom[]) => {
+    const ys = atoms.map((atom) => atom.position[1]);
+    return Math.max(...ys) - Math.min(...ys);
+  };
+  centerPart(partA.atoms);
+  centerPart(partB.atoms);
+  shiftY(partA.atoms, GAP / 2 + height(partA.atoms) / 2);
+  shiftY(partB.atoms, -GAP / 2 - height(partB.atoms) / 2);
+
+  const tagFor = (atoms: TemplateAtom[], label: string): SceneTag => ({
+    label,
+    position: [0, Math.max(...atoms.map((atom) => atom.position[1])) + 0.9, 0],
+  });
+
+  const atoms = [...partA.atoms, ...partB.atoms];
+  const bonds = [...partA.bonds, ...partB.bonds];
+  const nameA = aDisplay.name || "monomer A";
+  const nameB = bDisplay.name || "monomer B";
+  const label = safeLabel(`${nameA} + ${nameB}`, "Monomer pair");
+  return {
+    id: IMPORTED_TEMPLATE_ID,
+    name: label,
+    shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
+    family: "Monomer pair",
+    repeatLabel: label,
+    defaultRepeats: 1,
+    maxRepeats: 1,
+    step: [0, 0, 0],
+    // Molecule mode never links or caps; any two atoms satisfy the type.
+    connection: { leftAtomId: partA.atoms[0].id, rightAtomId: partB.atoms[0].id, order: 1 },
+    explicitGeometry: true,
+    tags: [tagFor(partA.atoms, "A"), tagFor(partB.atoms, "B")],
+    atoms,
+    bonds,
+    groups: [
+      { id: "monomer-a", label: "Monomer A", atomIds: partA.atoms.map((a) => a.id), bondIds: partA.bonds.map((b) => b.id), color: 0x44c7d8 },
+      { id: "monomer-b", label: "Monomer B", atomIds: partB.atoms.map((a) => a.id), bondIds: partB.bonds.map((b) => b.id), color: 0xf2b84b },
+    ],
+  };
+}
+
+// Namespace every atom/bond id (hydrogens included — this is for display).
+function prefixAllAtoms(template: PolymerTemplate, prefix: "A" | "B") {
+  const rename = (id: string) => `${prefix}_${id}`;
+  return {
+    atoms: template.atoms.map((atom) => ({
+      id: rename(atom.id),
+      element: atom.element,
+      position: [...atom.position] as [number, number, number],
+    })),
+    bonds: template.bonds.map((bond) => ({ id: rename(bond.id), a: rename(bond.a), b: rename(bond.b), order: bond.order })),
   };
 }
 

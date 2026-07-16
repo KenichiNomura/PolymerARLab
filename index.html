@@ -814,17 +814,8 @@
                 </label>
               </div>
               <button id="makeRepeatUnitBtn" type="button" disabled>Make repeat unit</button>
-              <div class="toggle" id="twoMonomerToggleRow" hidden>
-                <input id="twoMonomerToggle" type="checkbox" />
-                <label for="twoMonomerToggle">Two monomers (A-A + B-B)</label>
-              </div>
-              <div id="twoMonomerFlow" hidden>
-                <p class="hint" id="twoMonomerStatus">Load monomer A (e.g. a diol or diamine), pick its two anchors, then Set as monomer A. Next load monomer B (a diacid), pick its anchors, and Combine.</p>
-                <div class="button-row">
-                  <button id="setMonomerABtn" type="button" disabled>Set as monomer A</button>
-                  <button id="combineMonomersBtn" type="button" disabled>Combine A + B</button>
-                </div>
-              </div>
+              <button id="twoMonomerBtn" type="button" hidden>+ Use two monomers (A-A + B-B)</button>
+              <p class="hint" id="twoMonomerStatus" hidden></p>
 
               <div class="field polymer-only">
                 <label for="repeatRange">Repeats</label>

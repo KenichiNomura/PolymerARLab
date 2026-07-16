@@ -67,7 +67,7 @@
 1. Load a monomer with the right ends, e.g. `lactic acid`.
 2. In **"Make Polymer from Monomer"**, choose **Condensation (releases H2O)**. The app suggests the −COOH carbon and the −OH oxygen as anchors (you can re-pick them).
 3. Press **Make repeat unit** — the chain forms and little **water molecules float away from every new bond**. The Status panel counts them (`releases n−1 H2O`).
-4. For polymers made from **two different monomers**, tick **Two monomers (A-A + B-B)**: load the first one (try `ethylene glycol`), pick its two −OH oxygens, press **Set as monomer A**; then load the second (`terephthalic acid`), pick its two −COOH carbons, and press **Combine A + B** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
+4. For polymers made from **two different monomers**: load the first one (try `ethylene glycol`), pick its two −OH oxygens, and press **+ Use two monomers (A-A + B-B)**. Then load the second (`terephthalic acid`) — **both molecules appear side by side**, labelled **A** and **B**. Pick B's two −COOH carbons and press **Combine A + B** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
 5. Press **Save LAMMPS (UFF)**. It downloads two files: `<name>.data` (the molecule) and `in.relax` (the instructions).
 6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the movie of it moving (`.min.xyz`, `.nvt.xyz`) and the final shape (`.relaxed.data`).
 

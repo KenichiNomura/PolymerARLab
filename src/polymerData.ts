@@ -25,6 +25,13 @@ export interface ByproductSite {
   formula: "H2O";
 }
 
+/** Free-floating caption sprite in molecule space (e.g. "A"/"B" over the
+ *  side-by-side monomer preview). Display-only; ignored by exports. */
+export interface SceneTag {
+  label: string;
+  position: [number, number, number];
+}
+
 export interface TemplateAtom {
   id: string;
   element: AtomSymbol;
@@ -71,6 +78,8 @@ export interface PolymerTemplate {
   /** Template bonds that already released a byproduct when the unit was built
    *  (the internal A-B bond of a merged two-monomer condensation unit). */
   byproductSites?: Array<{ bondId: string; byproduct: ByproductInfo }>;
+  /** Caption sprites (molecule-mode display only, copied verbatim to the graph). */
+  tags?: SceneTag[];
   atoms: TemplateAtom[];
   bonds: TemplateBond[];
   groups: TemplateGroup[];
@@ -118,6 +127,8 @@ export interface MolecularGraph {
   warnings: string[];
   /** Water molecules released while forming this chain (condensation only). */
   byproducts: ByproductSite[];
+  /** Caption sprites (e.g. "A"/"B" over the monomer pair preview). */
+  tags?: SceneTag[];
 }
 
 function atom(id: string, element: AtomSymbol, x: number, y: number, z = 0, label?: string): TemplateAtom {
@@ -494,6 +505,7 @@ export function generatePolymerGraph(
     groups,
     warnings: validateGraph(atoms, bonds),
     byproducts,
+    tags: template.tags,
   };
 }
 
