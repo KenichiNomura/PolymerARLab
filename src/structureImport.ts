@@ -1,4 +1,13 @@
-import type { AtomSymbol, BondOrder, PolymerTemplate, TemplateAtom, TemplateBond, TemplateGroup } from "./polymerData";
+import type {
+  AtomSymbol,
+  BondOrder,
+  ByproductInfo,
+  PolymerMechanism,
+  PolymerTemplate,
+  TemplateAtom,
+  TemplateBond,
+  TemplateGroup,
+} from "./polymerData";
 
 export type StructureImportFormat = "auto" | "smiles" | "molfile" | "json";
 
@@ -121,13 +130,34 @@ export function buildMoleculeTemplate3D(sdf: string, name: string, is3d: boolean
   };
 }
 
+const WATER: ByproductInfo = { formula: "H2O", label: "water" };
+
+export interface RepeatUnitOptions {
+  mechanism?: PolymerMechanism;
+}
+
+/** A loaded monomer plus its two user-picked anchor atoms, staged for the
+ *  two-monomer condensation flow. */
+export interface MonomerSelection {
+  template: PolymerTemplate;
+  anchorA: string;
+  anchorB: string;
+}
+
 // Turn a loaded monomer into a tileable repeat unit given two backbone anchor
 // atoms. Strips hydrogens (the conformer re-adds them and drops the two
-// chain-axis ones) and, for a vinyl monomer, opens the C=C by reducing the
-// anchor-anchor bond order — so the addition-polymer backbone is single-bonded.
+// chain-axis ones). Addition: opens the C=C by reducing the anchor-anchor bond
+// order, so the backbone is single-bonded. Condensation: removes the acid
+// anchor's terminal -OH oxygen (it leaves as water together with the partner
+// anchor's hydrogen) and records the H2O byproduct on the connection.
 // Returns a molecule-less template (explicitGeometry off) for the conformer
 // polymer path to lay out and align.
-export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, anchorBId: string): PolymerTemplate {
+export function deriveRepeatUnit(
+  molecule: PolymerTemplate,
+  anchorAId: string,
+  anchorBId: string,
+  options: RepeatUnitOptions = {},
+): PolymerTemplate {
   if (anchorAId === anchorBId) throw new Error("Pick two different anchor atoms.");
   const byId = new Map(molecule.atoms.map((atom) => [atom.id, atom]));
   const anchorA = byId.get(anchorAId);
@@ -136,22 +166,33 @@ export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, a
   if (anchorA.element === "H" || anchorB.element === "H") throw new Error("Anchor atoms must be heavy atoms, not hydrogen.");
 
   // Drop hydrogens and any bond touching one.
-  const heavyIds = new Set(molecule.atoms.filter((atom) => atom.element !== "H").map((atom) => atom.id));
-  const atoms: TemplateAtom[] = molecule.atoms
-    .filter((atom) => heavyIds.has(atom.id))
-    .map((atom) => ({ id: atom.id, element: atom.element, position: [...atom.position] as [number, number, number] }));
-  const bonds: TemplateBond[] = molecule.bonds
-    .filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b))
-    .map((bond) => ({ id: bond.id, a: bond.a, b: bond.b, order: bond.order }));
+  let { atoms, bonds } = dropHydrogens(molecule);
 
   if (atoms.length < 2) throw new Error("Need at least two heavy atoms to make a repeat unit.");
 
-  // Open the anchor valences: reduce a double/triple bond between the anchors by
-  // one (a single or absent bond already leaves open valences after H removal).
-  for (const bond of bonds) {
-    const spansAnchors = (bond.a === anchorAId && bond.b === anchorBId) || (bond.a === anchorBId && bond.b === anchorAId);
-    if (spansAnchors && (bond.order === 2 || bond.order === 3)) {
-      bond.order = (bond.order - 1) as BondOrder;
+  const mechanism = options.mechanism ?? "addition";
+  let connection: PolymerTemplate["connection"] = { leftAtomId: anchorAId, rightAtomId: anchorBId, order: 1 };
+
+  if (mechanism === "condensation") {
+    const roles = resolveCondensationRoles(atoms, bonds, anchorAId, anchorBId);
+    ({ atoms, bonds } = removeAtom(atoms, bonds, roles.hydroxylOxygenId));
+    connection = {
+      leftAtomId: anchorAId,
+      rightAtomId: anchorBId,
+      order: 1,
+      mechanism: "condensation",
+      byproduct: WATER,
+      leftCap: roles.acidAnchorId === anchorAId ? "OH" : "H",
+      rightCap: roles.acidAnchorId === anchorBId ? "OH" : "H",
+    };
+  } else {
+    // Open the anchor valences: reduce a double/triple bond between the anchors by
+    // one (a single or absent bond already leaves open valences after H removal).
+    for (const bond of bonds) {
+      const spansAnchors = (bond.a === anchorAId && bond.b === anchorBId) || (bond.a === anchorBId && bond.b === anchorAId);
+      if (spansAnchors && (bond.order === 2 || bond.order === 3)) {
+        bond.order = (bond.order - 1) as BondOrder;
+      }
     }
   }
 
@@ -170,7 +211,7 @@ export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, a
     defaultRepeats: 4,
     maxRepeats: 10,
     step: [Math.max(2.4, span + 1.5), 0, 0],
-    connection: { leftAtomId: anchorAId, rightAtomId: anchorBId, order: 1 },
+    connection,
     explicitGeometry: false,
     atoms,
     bonds,
@@ -184,6 +225,190 @@ export function deriveRepeatUnit(molecule: PolymerTemplate, anchorAId: string, a
       },
     ],
   };
+}
+
+// Merge two condensation monomers (A-A + B-B, e.g. diol + diacid) into one
+// combined A-B repeat unit: an internal condensation bond joins A's second
+// anchor to B's first anchor (releasing one water per unit), and the
+// connection joins A's first anchor to B's second anchor across units
+// (releasing one water per link). The chain tiles as -A-B-A-B-.
+export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelection): PolymerTemplate {
+  const partA = prepareMonomerPart(a, "A");
+  const partB = prepareMonomerPart(b, "B");
+
+  // Lay B out to the right of A so the pre-conformer view is already chain-like.
+  const aMaxX = Math.max(...partA.atoms.map((atom) => atom.position[0]));
+  const bMinX = Math.min(...partB.atoms.map((atom) => atom.position[0]));
+  const shiftX = aMaxX - bMinX + 1.5;
+  for (const atom of partB.atoms) atom.position[0] += shiftX;
+
+  let atoms = [...partA.atoms, ...partB.atoms];
+  let bonds = [...partA.bonds, ...partB.bonds];
+
+  // Internal condensation bond: A.anchorB - B.anchorA (one H2O per unit).
+  const internalRoles = resolveCondensationRoles(atoms, bonds, partA.anchorB, partB.anchorA);
+  ({ atoms, bonds } = removeAtom(atoms, bonds, internalRoles.hydroxylOxygenId));
+  bonds.push({ id: "cond-internal", a: partA.anchorB, b: partB.anchorA, order: 1 });
+
+  // Inter-unit connection: A.anchorA - B.anchorB (one H2O per link). The acid
+  // side loses its -OH now; the chain-end cap restores it on the last unit.
+  const linkRoles = resolveCondensationRoles(atoms, bonds, partA.anchorA, partB.anchorB);
+  ({ atoms, bonds } = removeAtom(atoms, bonds, linkRoles.hydroxylOxygenId));
+
+  const nameA = a.template.name || "monomer A";
+  const nameB = b.template.name || "monomer B";
+  const label = safeLabel(`poly(${nameA} + ${nameB})`, "Combined repeat unit");
+  const anchorAtom = (id: string) => atoms.find((atom) => atom.id === id)!;
+  const span = Math.hypot(
+    ...(anchorAtom(partA.anchorA).position.map((value, i) => value - anchorAtom(partB.anchorB).position[i]) as [
+      number,
+      number,
+      number,
+    ]),
+  );
+
+  return {
+    id: IMPORTED_TEMPLATE_ID,
+    name: label,
+    shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
+    family: "Derived polymer",
+    repeatLabel: label,
+    defaultRepeats: 3,
+    maxRepeats: 8,
+    step: [Math.max(2.4, span + 1.5), 0, 0],
+    connection: {
+      leftAtomId: partA.anchorA,
+      rightAtomId: partB.anchorB,
+      order: 1,
+      mechanism: "condensation",
+      byproduct: WATER,
+      leftCap: linkRoles.acidAnchorId === partA.anchorA ? "OH" : "H",
+      rightCap: linkRoles.acidAnchorId === partB.anchorB ? "OH" : "H",
+    },
+    byproductSites: [{ bondId: "cond-internal", byproduct: WATER }],
+    explicitGeometry: false,
+    atoms,
+    bonds,
+    groups: [
+      {
+        id: "repeat-unit",
+        label: "Repeat unit",
+        atomIds: atoms.map((atom) => atom.id),
+        bondIds: bonds.map((bond) => bond.id),
+        color: 0x44c7d8,
+      },
+    ],
+  };
+}
+
+// Strip hydrogens from one monomer and namespace its atom/bond ids so two
+// monomers can be merged without collisions. Returns the remapped anchors too.
+function prepareMonomerPart(selection: MonomerSelection, prefix: "A" | "B") {
+  const { template, anchorA, anchorB } = selection;
+  if (anchorA === anchorB) throw new Error(`Pick two different anchor atoms on monomer ${prefix}.`);
+  const byId = new Map(template.atoms.map((atom) => [atom.id, atom]));
+  for (const anchorId of [anchorA, anchorB]) {
+    const atom = byId.get(anchorId);
+    if (!atom) throw new Error(`Anchor atom is not part of monomer ${prefix}.`);
+    if (atom.element === "H") throw new Error(`Monomer ${prefix} anchors must be heavy atoms, not hydrogen.`);
+  }
+  const dropped = dropHydrogens(template);
+  const rename = (id: string) => `${prefix}_${id}`;
+  return {
+    atoms: dropped.atoms.map((atom) => ({ ...atom, id: rename(atom.id) })),
+    bonds: dropped.bonds.map((bond) => ({ ...bond, id: rename(bond.id), a: rename(bond.a), b: rename(bond.b) })),
+    anchorA: rename(anchorA),
+    anchorB: rename(anchorB),
+  };
+}
+
+function dropHydrogens(template: PolymerTemplate): { atoms: TemplateAtom[]; bonds: TemplateBond[] } {
+  const heavyIds = new Set(template.atoms.filter((atom) => atom.element !== "H").map((atom) => atom.id));
+  return {
+    atoms: template.atoms
+      .filter((atom) => heavyIds.has(atom.id))
+      .map((atom) => ({ id: atom.id, element: atom.element, position: [...atom.position] as [number, number, number] })),
+    bonds: template.bonds
+      .filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b))
+      .map((bond) => ({ id: bond.id, a: bond.a, b: bond.b, order: bond.order })),
+  };
+}
+
+function removeAtom(
+  atoms: TemplateAtom[],
+  bonds: TemplateBond[],
+  atomId: string,
+): { atoms: TemplateAtom[]; bonds: TemplateBond[] } {
+  return {
+    atoms: atoms.filter((atom) => atom.id !== atomId),
+    bonds: bonds.filter((bond) => bond.a !== atomId && bond.b !== atomId),
+  };
+}
+
+interface CondensationRoles {
+  /** The carboxylic-acid carbon; its terminal -OH oxygen leaves as water. */
+  acidAnchorId: string;
+  /** The alcohol oxygen or amine nitrogen that stays in the chain. */
+  partnerAnchorId: string;
+  hydroxylOxygenId: string;
+}
+
+// Decide which of the two picked anchors is the carboxylic-acid carbon and
+// which is the alcohol -OH oxygen / amine -NH2 nitrogen, working on the
+// hydrogen-stripped graph. Throws descriptive errors for unusable picks.
+function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], anchorAId: string, anchorBId: string): CondensationRoles {
+  const elementById = new Map(atoms.map((atom) => [atom.id, atom.element]));
+  const neighborsOf = (atomId: string) =>
+    bonds
+      .filter((bond) => bond.a === atomId || bond.b === atomId)
+      .map((bond) => ({ otherId: bond.a === atomId ? bond.b : bond.a, order: bond.order }));
+
+  // A carboxylic-acid carbon carries a double-bonded O and a terminal
+  // single-bonded O (the -OH). Returns that hydroxyl oxygen's id.
+  const findAcidHydroxyl = (anchorId: string): string | null => {
+    if (elementById.get(anchorId) !== "C") return null;
+    const neighbors = neighborsOf(anchorId);
+    const hasCarbonyl = neighbors.some((n) => n.order === 2 && elementById.get(n.otherId) === "O");
+    if (!hasCarbonyl) return null;
+    const hydroxyl = neighbors.find(
+      (n) => n.order === 1 && elementById.get(n.otherId) === "O" && neighborsOf(n.otherId).length === 1,
+    );
+    return hydroxyl ? hydroxyl.otherId : null;
+  };
+
+  const isPartner = (anchorId: string): boolean => {
+    const element = elementById.get(anchorId);
+    const degree = neighborsOf(anchorId).length;
+    if (element === "O") return degree === 1; // terminal -OH oxygen
+    if (element === "N") return degree <= 2; // -NH2 or secondary amine
+    return false;
+  };
+
+  const hydroxylFromA = findAcidHydroxyl(anchorAId);
+  const hydroxylFromB = findAcidHydroxyl(anchorBId);
+
+  if (hydroxylFromA && hydroxylFromB) {
+    throw new Error(
+      "Both anchors are acid carbons (-COOH). Condensation needs an -OH or -NH2 partner — use the two-monomer flow with a diol or diamine.",
+    );
+  }
+  const acidAnchorId = hydroxylFromA ? anchorAId : hydroxylFromB ? anchorBId : null;
+  const hydroxylOxygenId = hydroxylFromA ?? hydroxylFromB;
+  if (!acidAnchorId || !hydroxylOxygenId) {
+    throw new Error(
+      "Neither anchor is a carboxylic-acid carbon. Pick the C of a -COOH group as one anchor (it must still have its -OH).",
+    );
+  }
+  const partnerAnchorId = acidAnchorId === anchorAId ? anchorBId : anchorAId;
+  if (hydroxylOxygenId === partnerAnchorId) {
+    throw new Error("The two anchors belong to the same -COOH group. Pick an -OH or -NH2 elsewhere on the molecule.");
+  }
+  if (!isPartner(partnerAnchorId)) {
+    throw new Error(
+      "The second anchor must be a hydroxyl oxygen (-OH) or amine nitrogen (-NH2) so it can bond to the acid carbon and release water.",
+    );
+  }
+  return { acidAnchorId, partnerAnchorId, hydroxylOxygenId };
 }
 
 function detectFormat(source: string, format: StructureImportFormat): Exclude<StructureImportFormat, "auto"> {
