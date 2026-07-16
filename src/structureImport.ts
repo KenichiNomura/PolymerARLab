@@ -209,7 +209,7 @@ export function deriveRepeatUnit(
     shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
     family: "Derived polymer",
     repeatLabel: label,
-    defaultRepeats: 4,
+    defaultRepeats: 1,
     maxRepeats: 10,
     step: [Math.max(2.4, span + 1.5), 0, 0],
     connection,
@@ -274,7 +274,7 @@ export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelec
     shortName: label.length > 18 ? `${label.slice(0, 17)}…` : label,
     family: "Derived polymer",
     repeatLabel: label,
-    defaultRepeats: 3,
+    defaultRepeats: 1,
     maxRepeats: 8,
     step: [Math.max(2.4, span + 1.5), 0, 0],
     connection: {
@@ -433,10 +433,10 @@ interface CondensationRoles {
   hydroxylOxygenId: string;
 }
 
-// Decide which of the two picked anchors is the carboxylic-acid carbon and
-// which is the alcohol -OH oxygen / amine -NH2 nitrogen, working on the
-// hydrogen-stripped graph. Throws descriptive errors for unusable picks.
-function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], anchorAId: string, anchorBId: string): CondensationRoles {
+// Shared classification of condensation-reactive sites on a hydrogen-stripped
+// graph: carboxylic-acid carbons and their -OH oxygens, plus alcohol/amine
+// partner atoms.
+function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond[]) {
   const elementById = new Map(atoms.map((atom) => [atom.id, atom.element]));
   const neighborsOf = (atomId: string) =>
     bonds
@@ -465,6 +465,35 @@ function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], 
     if (element === "N") return neighbors.length <= 2; // -NH2 or secondary amine
     return false;
   };
+
+  return { findAcidHydroxyl, isPartner };
+}
+
+// Early validation for the two-monomer flow: each of monomer A's picked
+// anchors must be a condensation-reactive site (a -COOH carbon with its -OH
+// intact, an -OH oxygen, or an -NH2 nitrogen), so bad picks error when the
+// student stages monomer A instead of later at Combine.
+export function assertCondensationAnchors(molecule: PolymerTemplate, anchorAId: string, anchorBId: string): void {
+  if (anchorAId === anchorBId) throw new Error("Pick two different anchor atoms.");
+  const { atoms, bonds } = dropHydrogens(molecule);
+  const { findAcidHydroxyl, isPartner } = condensationSiteTools(atoms, bonds);
+  for (const [which, anchorId] of [
+    ["Anchor 1", anchorAId],
+    ["Anchor 2", anchorBId],
+  ] as const) {
+    if (!findAcidHydroxyl(anchorId) && !isPartner(anchorId)) {
+      throw new Error(
+        `${which} cannot react in a condensation: pick a -COOH carbon (with its -OH still attached), an -OH oxygen, or an -NH2 nitrogen.`,
+      );
+    }
+  }
+}
+
+// Decide which of the two picked anchors is the carboxylic-acid carbon and
+// which is the alcohol -OH oxygen / amine -NH2 nitrogen, working on the
+// hydrogen-stripped graph. Throws descriptive errors for unusable picks.
+function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], anchorAId: string, anchorBId: string): CondensationRoles {
+  const { findAcidHydroxyl, isPartner } = condensationSiteTools(atoms, bonds);
 
   const hydroxylFromA = findAcidHydroxyl(anchorAId);
   const hydroxylFromB = findAcidHydroxyl(anchorBId);

@@ -31,6 +31,7 @@ import {
 import { installWebXR } from "./scene/webxr";
 import {
   IMPORTED_TEMPLATE_ID,
+  assertCondensationAnchors,
   buildMoleculeTemplate3D,
   buildMonomerPairPreview,
   combineCondensationMonomers,
@@ -513,6 +514,16 @@ function activatePolymerTemplate(derived: PolymerTemplate) {
 function useTwoMonomers() {
   if (!importedTemplate) {
     showImportStatus("Load monomer A first (PubChem, scan, or example), then pick its two anchors.");
+    return;
+  }
+  // Students pick monomer A's two anchors themselves; reject unusable picks
+  // now, with a readable message, rather than later at Combine.
+  try {
+    assertCondensationAnchors(importedTemplate, anchorASelect.value, anchorBSelect.value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showImportStatus(message);
+    showStatus(`Check monomer A's anchors: ${message}`, true);
     return;
   }
   pendingMonomerA = { template: importedTemplate, anchorA: anchorASelect.value, anchorB: anchorBSelect.value };
