@@ -378,9 +378,11 @@ function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], 
 
   const isPartner = (anchorId: string): boolean => {
     const element = elementById.get(anchorId);
-    const degree = neighborsOf(anchorId).length;
-    if (element === "O") return degree === 1; // terminal -OH oxygen
-    if (element === "N") return degree <= 2; // -NH2 or secondary amine
+    const neighbors = neighborsOf(anchorId);
+    // Single bonds only: a carbonyl =O (degree 1) or nitrile N cannot condense.
+    if (!neighbors.every((n) => n.order === 1)) return false;
+    if (element === "O") return neighbors.length === 1; // terminal -OH oxygen
+    if (element === "N") return neighbors.length <= 2; // -NH2 or secondary amine
     return false;
   };
 

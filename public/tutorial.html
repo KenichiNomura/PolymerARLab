@@ -363,14 +363,15 @@
         <li><span class="stepnum">1</span><div><b>Load a monomer.</b> Tap <b>Edit</b>, type a name or CID in the <b>PubChem</b> box (try <code>ethylene</code>, <code>styrene</code>, or <code>2244</code>), and press <b>Load</b>. The real 3-D structure appears.</div></li>
         <li><span class="stepnum">2</span><div><b>Turn on Atom labels</b> so each atom shows its label (C1, C2, O1…). This is how you'll identify the backbone atoms.</div></li>
         <li><span class="stepnum">3</span><div><b>Open “Make Polymer from Monomer.”</b> Choose <b>Anchor 1</b> and <b>Anchor 2</b> — the two backbone atoms (for a vinyl monomer, the two C=C carbons). Press <b>Make repeat unit</b>: the double bond opens and the unit tiles into a chain.</div></li>
-        <li><span class="stepnum">4</span><div><b>Set the chain length</b> with the <b>Repeats</b> slider.</div></li>
-        <li><span class="stepnum">5</span><div><b>Export for LAMMPS.</b> Press <b>Save LAMMPS (UFF)</b>. Two files download:
+        <li><span class="stepnum">4</span><div><b>Or cure by condensation.</b> Switch the mechanism to <b>Condensation (releases H2O)</b> for monomers like <code>lactic acid</code>: the app suggests the −COOH carbon and −OH oxygen as anchors, and every new link squeezes out a little <b>water molecule that drifts away from the chain</b> (the Status panel counts them). For two-monomer polymers, tick <b>Two monomers (A-A + B-B)</b>: load <code>ethylene glycol</code>, press <b>Set as monomer A</b>, then load <code>terephthalic acid</code> and press <b>Combine A + B</b> — that's PET. (<code>hexamethylenediamine</code> + <code>adipic acid</code> gives nylon 6,6.) The released waters stay a teaching visual — they are not included in AR Quick Look or LAMMPS exports.</div></li>
+        <li><span class="stepnum">5</span><div><b>Set the chain length</b> with the <b>Repeats</b> slider.</div></li>
+        <li><span class="stepnum">6</span><div><b>Export for LAMMPS.</b> Press <b>Save LAMMPS (UFF)</b>. Two files download:
           <div style="margin-top:6px">
             <code>&lt;name&gt;.data</code> — atoms, bonds, and a self-contained UFF-style force field (no external force-field file needed).<br/>
             <code>in.relax</code> — the run script.
           </div>
         </div></li>
-        <li><span class="stepnum">6</span><div><b>Relax it.</b> Run <code>lmp -in in.relax</code>. The script does an overlap-relief warm-up → <b>FIRE</b> energy minimization → <b>NVT at 300 K for 10 ps</b>, and writes:
+        <li><span class="stepnum">7</span><div><b>Relax it.</b> Run <code>lmp -in in.relax</code>. The script does an overlap-relief warm-up → <b>FIRE</b> energy minimization → <b>NVT at 300 K for 10 ps</b>, and writes:
           <div style="margin-top:6px">
             <code>&lt;name&gt;.min.xyz</code> (minimization trajectory), <code>&lt;name&gt;.nvt.xyz</code> (NVT trajectory), and <code>&lt;name&gt;.relaxed.data</code> (final structure).
           </div>

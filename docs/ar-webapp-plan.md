@@ -257,6 +257,15 @@ Major features added after the roadmap above (see git history / README for detai
   (`deriveRepeatUnit`). Repeat units align along the backbone axis and **rotate
   about it** to avoid side-group overlap (`bestTwist` in `conformer3d.ts`), with
   natural bond lengths and **H-capped chain ends**.
+- **Condensation curing** — a second mechanism next to addition: the acid
+  anchor's terminal −OH leaves with the partner anchor's H, and every formed
+  ester/amide link releases one **animated H₂O** that drifts off the chain
+  (`ByproductAnimator` in `src/byproductAnimation.ts`; byproducts are graph
+  metadata (`graph.byproducts`), never atoms, so LAMMPS/USDZ exports exclude
+  them). Supports single self-condensing monomers (lactic acid → PLA) and a
+  **two-monomer A-A + B-B flow** (`combineCondensationMonomers`: diol/diamine +
+  diacid → PET / nylon 6,6, merged into one alternating repeat unit).
+  Condensation acid chain ends are re-capped with −OH so ends read −COOH.
 - **Removed** the *Import custom structure* (SMILES/Molfile/JSON) panel and the
   *Polymer Examples* dropdown; the internal graph-JSON import path remains for the
   scanner.

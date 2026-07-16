@@ -61,6 +61,13 @@
 2. Turn on **Atom labels** so every atom shows its name (C1, C2, …).
 3. Open **"Make Polymer from Monomer"**, pick the **two backbone atoms** (for these, the two carbons of the double bond), and press **Make repeat unit**. The molecule copies itself into a chain.
 4. Drag the **Repeats** slider to make the chain longer or shorter.
+
+**Condensation polymers (they release water!):** some real polymers — polyesters like PET, nylons, proteins — form by *condensation*: every new bond squeezes out one H₂O molecule. To try it:
+
+1. Load a monomer with the right ends, e.g. `lactic acid`.
+2. In **"Make Polymer from Monomer"**, choose **Condensation (releases H2O)**. The app suggests the −COOH carbon and the −OH oxygen as anchors (you can re-pick them).
+3. Press **Make repeat unit** — the chain forms and little **water molecules float away from every new bond**. The Status panel counts them (`releases n−1 H2O`).
+4. For polymers made from **two different monomers**, tick **Two monomers (A-A + B-B)**: load the first one (try `ethylene glycol`), pick its two −OH oxygens, press **Set as monomer A**; then load the second (`terephthalic acid`), pick its two −COOH carbons, and press **Combine A + B** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
 5. Press **Save LAMMPS (UFF)**. It downloads two files: `<name>.data` (the molecule) and `in.relax` (the instructions).
 6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the movie of it moving (`.min.xyz`, `.nvt.xyz`) and the final shape (`.relaxed.data`).
 

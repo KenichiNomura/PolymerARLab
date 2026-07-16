@@ -404,8 +404,11 @@ function applyAnchorPreselect(template: PolymerTemplate) {
     const partners = heavy
       .filter((atom) => !acidHydroxyls.has(atom.id))
       .filter((atom) => {
-        const degree = neighborsOf(atom.id).length;
-        return (atom.element === "O" && degree === 1) || (atom.element === "N" && degree <= 2);
+        // All-single bonds only: a carbonyl =O or nitrile N also has low
+        // degree but cannot condense.
+        const neighbors = neighborsOf(atom.id);
+        if (!neighbors.every((n) => n.order === 1)) return false;
+        return (atom.element === "O" && neighbors.length === 1) || (atom.element === "N" && neighbors.length <= 2);
       })
       .map((atom) => atom.id);
 
@@ -467,6 +470,9 @@ function activatePolymerTemplate(derived: PolymerTemplate) {
   importedTemplateOption.hidden = false;
   importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
   polymerSelect.value = IMPORTED_TEMPLATE_ID;
+  // Raise max before value: the slider still carries molecule-mode max=1 and
+  // would silently clamp defaultRepeats down to 1.
+  repeatRange.max = String(derived.maxRepeats);
   repeatRange.value = String(derived.defaultRepeats);
   rebuildGraph();
 }
@@ -499,6 +505,10 @@ function combineMonomers() {
       anchorB: anchorBSelect.value,
     });
     activatePolymerTemplate(combined);
+    pendingMonomerA = null;
+    combineMonomersBtn.disabled = true;
+    twoMonomerStatus.textContent =
+      "Chain built. To make a different polymer, load a new monomer A, pick its anchors, and Set as monomer A again.";
     showImportStatus(`Combined repeat unit: ${combined.name}.`);
     showStatus("Monomers combined; every ester/amide bond releases one H2O. Adjust Repeats to grow the chain.");
   } catch (error) {
