@@ -342,20 +342,10 @@
       }
 
       .range-row,
-      .button-row,
       .toggle {
         display: flex;
         align-items: center;
         gap: 8px;
-      }
-
-      .mode-toggle {
-        justify-content: space-between;
-        min-height: 36px;
-        padding: 0 10px;
-        border: 1px solid rgba(247, 243, 232, 0.16);
-        border-radius: 6px;
-        background: rgba(247, 243, 232, 0.07);
       }
 
       .range-row span {
@@ -363,21 +353,6 @@
         text-align: right;
         color: #f2b84b;
         font-weight: 800;
-      }
-
-      .button-row {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .button-row button,
-      .button-row select {
-        min-width: 0;
-        padding: 0 8px;
-      }
-
-      .button-row .span-full {
-        grid-column: 1 / -1;
       }
 
       .summary {
@@ -436,56 +411,6 @@
       .control-section[open] > summary::after {
         content: "-";
         color: #ffd166;
-      }
-
-      .inline-section {
-        display: grid;
-        gap: 0;
-        border: 1px solid rgba(247, 243, 232, 0.12);
-        border-radius: 6px;
-        background: rgba(7, 8, 7, 0.22);
-      }
-
-      .inline-section[open] {
-        gap: 8px;
-      }
-
-      .inline-section summary {
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        min-height: 36px;
-        padding: 0 10px;
-        color: rgba(247, 243, 232, 0.76);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        list-style: none;
-        text-transform: uppercase;
-      }
-
-      .inline-section summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .inline-section summary::after {
-        content: "+";
-        color: rgba(247, 243, 232, 0.58);
-        font-size: 15px;
-        line-height: 1;
-      }
-
-      .inline-section[open] summary::after {
-        content: "-";
-        color: #ffd166;
-      }
-
-      .inline-section-body {
-        display: grid;
-        gap: 8px;
-        padding: 0 10px 10px;
       }
 
       .hint {
@@ -566,22 +491,9 @@
         display: none;
       }
 
-      .section-body {
-        display: grid;
-        gap: 8px;
-        padding-top: 8px;
-      }
-
-      .import-grid,
-      .import-actions {
+      .import-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 6px;
-      }
-
-      .example-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
         gap: 6px;
       }
 
@@ -763,9 +675,7 @@
         }
 
         .import-grid,
-        .import-actions,
-        .attachment-grid,
-        .button-row {
+        .attachment-grid {
           grid-template-columns: 1fr;
         }
 
@@ -851,9 +761,7 @@
             <label for="hydrogensToggle">Show hydrogens</label>
           </div>
 
-          <select id="polymerSelect" hidden aria-hidden="true"></select>
-
-          <div id="importStatus">Template library active.</div>
+          <div id="importStatus">Loading chemistry...</div>
       </div>
 
       <div id="polymerPanel" class="control-panel" aria-label="Polymer builder" hidden>

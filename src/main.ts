@@ -6,10 +6,8 @@ import { renderFallbackGraph } from "./fallback2d";
 import { buildUFFData, buildUFFInput, downloadTextFile } from "./lammpsExport";
 import { isIOSDevice } from "./platform";
 import {
-  POLYMER_TEMPLATES,
   elementLabels,
   generatePolymerGraph,
-  getTemplate,
   summarizeBondOrders,
   type MolecularGraph,
   type PolymerMechanism,
@@ -30,16 +28,15 @@ import {
 } from "./scene/threeScene";
 import { installWebXR } from "./scene/webxr";
 import {
-  IMPORTED_TEMPLATE_ID,
   assertCondensationAnchors,
   buildMoleculeTemplate3D,
   buildMonomerPairPreview,
   combineCondensationMonomers,
+  condensationSiteTools,
   deriveRepeatUnit,
   importStructure,
   type StructureImportFormat,
 } from "./structureImport";
-import { populateTemplateSelect } from "./ui/examples";
 import { showImportStatus, showPlatformStatus, showScanStatus, showStatus } from "./ui/status";
 import { cleanupTemplateGeometry } from "./vseprGeometry";
 
@@ -51,7 +48,6 @@ const appEl = document.getElementById("app")!;
 const fallbackEl = document.getElementById("fallbackMolecule")!;
 const videoEl = document.getElementById("cameraFeed") as HTMLVideoElement;
 const arEntryEl = document.getElementById("arEntry")!;
-const polymerSelect = document.getElementById("polymerSelect") as HTMLSelectElement;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
@@ -101,7 +97,7 @@ const validationStatus = document.getElementById("validationStatus")!;
 // Structure state
 // ---------------------------------------------------------------------------
 
-let currentTemplate: PolymerTemplate = POLYMER_TEMPLATES[0];
+let currentTemplate: PolymerTemplate = C60_TEMPLATE;
 let importedTemplate: PolymerTemplate | null = null;
 let currentGraph: MolecularGraph | null = null;
 let three: ThreeRuntime | null = null;
@@ -230,9 +226,10 @@ function updateStructureModeUi() {
   renderBuilderUi();
 }
 
-function getActiveTemplate(id: string): PolymerTemplate {
-  if (id === IMPORTED_TEMPLATE_ID && importedTemplate) return importedTemplate;
-  return getTemplate(id);
+// The structure being displayed/exported: whatever was last imported or
+// derived, with the baked-in C60 as the boot-time default.
+function activeTemplate(): PolymerTemplate {
+  return importedTemplate ?? C60_TEMPLATE;
 }
 
 function clampRepeats(value: number, max: number) {
@@ -275,11 +272,8 @@ function templateGeometry(template: PolymerTemplate, mode: "molecule" | "polymer
 // ---------------------------------------------------------------------------
 
 function rebuildGraph() {
-  if (polymerSelect.value === IMPORTED_TEMPLATE_ID && !importedTemplate) {
-    polymerSelect.value = POLYMER_TEMPLATES[0].id;
-  }
   const mode = isPolymerMode() ? "polymer" : "molecule";
-  currentTemplate = templateGeometry(getActiveTemplate(polymerSelect.value), mode);
+  currentTemplate = templateGeometry(activeTemplate(), mode);
   repeatRange.max = String(currentTemplate.maxRepeats);
   if (Number(repeatRange.value) > currentTemplate.maxRepeats) {
     repeatRange.value = String(currentTemplate.maxRepeats);
@@ -356,9 +350,7 @@ function updateSummary() {
 // Import pipeline
 // ---------------------------------------------------------------------------
 
-const importedTemplateOption = populateTemplateSelect(polymerSelect);
-
-// Internal import used by the curated examples and the sketch recognizer (the
+// Internal import used by the sketch recognizer and PubChem loads (the
 // user-facing paste panel was removed). Attachment atoms come from the graph
 // JSON itself, so no manual attachment override is passed.
 async function loadImportedStructure(
@@ -373,9 +365,6 @@ async function loadImportedStructure(
       options.repeatOverride == null
         ? result.template
         : { ...result.template, defaultRepeats: clampRepeats(options.repeatOverride, result.template.maxRepeats) };
-    importedTemplateOption.hidden = false;
-    importedTemplateOption.textContent = `${importedTemplate.shortName} - ${importedTemplate.name}`;
-    polymerSelect.value = IMPORTED_TEMPLATE_ID;
     repeatRange.value = String(importedTemplate.defaultRepeats);
     rebuildGraph();
     onStructureLoaded();
@@ -428,9 +417,6 @@ async function normalizeWithChemistryFallback(
 function showImportedTemplate(template: PolymerTemplate, statusMessage: string) {
   setPolymerMode(false);
   importedTemplate = template;
-  importedTemplateOption.hidden = false;
-  importedTemplateOption.textContent = `${template.shortName} - ${template.name}`;
-  polymerSelect.value = IMPORTED_TEMPLATE_ID;
   repeatRange.value = "1";
   rebuildGraph();
   onStructureLoaded();
@@ -477,38 +463,22 @@ function applyAnchorPreselect(template: PolymerTemplate) {
   if (heavy.length < 2) return;
 
   if (currentMechanism() === "condensation") {
+    // Reactive-site detection is shared with the derive/combine chemistry, so
+    // the suggestions can never disagree with what validation accepts.
     const heavyIds = new Set(heavy.map((atom) => atom.id));
-    const elementById = new Map(heavy.map((atom) => [atom.id, atom.element]));
     const heavyBonds = template.bonds.filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b));
-    const neighborsOf = (atomId: string) =>
-      heavyBonds
-        .filter((bond) => bond.a === atomId || bond.b === atomId)
-        .map((bond) => ({ otherId: bond.a === atomId ? bond.b : bond.a, order: bond.order }));
+    const { findAcidHydroxyl, isPartner } = condensationSiteTools(heavy, heavyBonds);
 
     const acidCarbons: string[] = [];
     const acidHydroxyls = new Set<string>();
     for (const atom of heavy) {
-      if (atom.element !== "C") continue;
-      const neighbors = neighborsOf(atom.id);
-      const carbonyl = neighbors.some((n) => n.order === 2 && elementById.get(n.otherId) === "O");
-      const hydroxyl = neighbors.find(
-        (n) => n.order === 1 && elementById.get(n.otherId) === "O" && neighborsOf(n.otherId).length === 1,
-      );
-      if (carbonyl && hydroxyl) {
+      const hydroxyl = findAcidHydroxyl(atom.id);
+      if (hydroxyl) {
         acidCarbons.push(atom.id);
-        acidHydroxyls.add(hydroxyl.otherId);
+        acidHydroxyls.add(hydroxyl);
       }
     }
-    const partners = heavy
-      .filter((atom) => !acidHydroxyls.has(atom.id))
-      .filter((atom) => {
-        // All-single bonds only: a carbonyl =O or nitrile N also has low
-        // degree but cannot condense.
-        const neighbors = neighborsOf(atom.id);
-        if (!neighbors.every((n) => n.order === 1)) return false;
-        return (atom.element === "O" && neighbors.length === 1) || (atom.element === "N" && neighbors.length <= 2);
-      })
-      .map((atom) => atom.id);
+    const partners = heavy.filter((atom) => !acidHydroxyls.has(atom.id) && isPartner(atom.id)).map((atom) => atom.id);
 
     // Acid + partner (hydroxy/amino acid), two acids (diacid), two partners
     // (diol/diamine) — in that order of preference.
@@ -566,16 +536,10 @@ function refreshBuilderView() {
   if (A && B) {
     const preview = buildMonomerPairPreview(A.display, B.display);
     importedTemplate = preview;
-    importedTemplateOption.hidden = false;
-    importedTemplateOption.textContent = `${preview.shortName} - ${preview.name}`;
-    polymerSelect.value = IMPORTED_TEMPLATE_ID;
     rebuildGraph();
     populateAnchorControls(preview, { onlyPrefix: `${builder.activeSlot}_` });
   } else if (active) {
     importedTemplate = active.template;
-    importedTemplateOption.hidden = false;
-    importedTemplateOption.textContent = `${active.template.shortName} - ${active.template.name}`;
-    polymerSelect.value = IMPORTED_TEMPLATE_ID;
     rebuildGraph();
     populateAnchorControls(active.template);
   } else {
@@ -661,9 +625,6 @@ function makeRepeatUnit() {
 function activatePolymerTemplate(derived: PolymerTemplate) {
   setPolymerMode(true);
   importedTemplate = derived;
-  importedTemplateOption.hidden = false;
-  importedTemplateOption.textContent = `${derived.shortName} - ${derived.name}`;
-  polymerSelect.value = IMPORTED_TEMPLATE_ID;
   // Raise max before value: the slider still carries molecule-mode max=1 and
   // would silently clamp defaultRepeats down to 1.
   repeatRange.max = String(derived.maxRepeats);
@@ -713,7 +674,7 @@ async function loadFromPubChem(query: string) {
 // their own atoms, so currentGraph already reflects them.
 function graphForExport(): MolecularGraph | null {
   if (!currentGraph) return null;
-  const base = getActiveTemplate(polymerSelect.value);
+  const base = activeTemplate();
   if (hydrogensToggle.checked || base.explicitGeometry) return currentGraph;
   const mode = isPolymerMode() ? "polymer" : "molecule";
   const withH = templateTo3D(base, { mode, includeHydrogens: true }) ?? cleanupTemplateGeometry(base, { mode });
@@ -832,13 +793,6 @@ window.addEventListener("resize", () => {
   if (three) handleResize(three);
 });
 
-polymerSelect.addEventListener("change", () => {
-  const template = getActiveTemplate(polymerSelect.value);
-  repeatRange.value = String(template.defaultRepeats);
-  rebuildGraph();
-  showStatus(`Verification target: ${template.shortName}.`);
-});
-
 pubchemLoadBtn.addEventListener("click", () => {
   void loadFromPubChem(pubchemInput.value);
 });
@@ -950,7 +904,6 @@ arQuickLookBtn.addEventListener("click", () => {
 aiRecognitionEndpoint();
 aiAccessToken();
 
-polymerSelect.value = currentTemplate.id;
 repeatRange.value = String(currentTemplate.defaultRepeats);
 repeatRange.max = String(currentTemplate.maxRepeats);
 

@@ -436,7 +436,9 @@ interface CondensationRoles {
 // Shared classification of condensation-reactive sites on a hydrogen-stripped
 // graph: carboxylic-acid carbons and their -OH oxygens, plus alcohol/amine
 // partner atoms.
-function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond[]) {
+// Shared definition of "what can condense", used by the derive/combine
+// chemistry, stage-time validation, and the UI's anchor auto-suggestions.
+export function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond[]) {
   const elementById = new Map(atoms.map((atom) => [atom.id, atom.element]));
   const neighborsOf = (atomId: string) =>
     bonds
