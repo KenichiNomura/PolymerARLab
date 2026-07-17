@@ -49,7 +49,7 @@
 3. **Look around** — drag to spin it, scroll or pinch to zoom. In **Edit** you can turn on **Atom labels** (C1, C2, …) and **Show hydrogens**.
 4. **See it in AR** — put the molecule on your real desk:
    - 📱 **iPhone/iPad:** tap the **AR View** button, wait until it glows, tap again, then point at your paper.
-   - 🤖 **Android:** tap **START AR** (top-right), point at your desk, and tap the screen — the molecule grows right out of it.
+   - 🤖 **Android:** tap **START AR** (top-right), point at your desk, and tap the screen — the molecule appears on that spot.
 
 *(AR needs a back camera and a secure page. If your device can't do AR, you can still spin the molecule in 3-D.)*
 
