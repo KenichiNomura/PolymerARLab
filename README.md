@@ -60,7 +60,7 @@
 <img src="docs/images/monomer-to-polymer.svg" alt="Start from a monomer, pick its two backbone atoms, the double bond opens, and the unit repeats into a chain" width="100%">
 
 1. **Open the polymer builder.** Tap the **Polymer** 🔗 icon in the bottom-left dock and choose how your polymer cures: **Addition cure** (opens a C=C double bond) or **Condensation cure** (each new bond releases one H₂O). The screen clears so you start fresh.
-2. **Load a monomer.** Type a name in the panel's **PubChem** box — try `ethylene` or `styrene` for addition — and press **Load**. Turn on **Atom labels** (in **Edit**) so every atom shows its name (C1, C2, …).
+2. **Load a monomer.** Type a name in the panel's **PubChem** box — try `ethylene` or `styrene` for addition — and press **Load**. Atom labels turn on automatically so every atom shows its name (C1, C2, …).
 3. **Pick the two anchor atoms** — where the chain will connect (for a vinyl monomer, the two carbons of the double bond) — and press **Make repeat unit**. The molecule copies itself into a chain.
 4. Drag the **Repeats** slider to make the chain longer or shorter.
 

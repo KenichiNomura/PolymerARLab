@@ -919,7 +919,16 @@ function togglePanel(panel: HTMLElement, button: HTMLButtonElement) {
 }
 statusToggleBtn.addEventListener("click", () => togglePanel(statusPanel, statusToggleBtn));
 editToggleBtn.addEventListener("click", () => togglePanel(editPanel, editToggleBtn));
-polymerToggleBtn.addEventListener("click", () => togglePanel(polymerPanel, polymerToggleBtn));
+polymerToggleBtn.addEventListener("click", () => {
+  togglePanel(polymerPanel, polymerToggleBtn);
+  // Anchor picking needs the C1/O2/... labels, so opening the builder turns
+  // them on. They stay on after closing; the Edit toggle turns them back off.
+  if (!polymerPanel.hidden && !labelsToggle.checked) {
+    labelsToggle.checked = true;
+    three?.moleculeRenderer.setLabelsVisible(true);
+    showStatus("Atom labels turned on for anchor picking.");
+  }
+});
 tutorialBtn.addEventListener("click", () => window.open("tutorial.html", "_blank", "noopener"));
 arQuickLookBtn.addEventListener("click", () => {
   // An active camera stream holds the camera hardware that iOS AR Quick Look
