@@ -132,6 +132,7 @@ export function buildMoleculeTemplate3D(sdf: string, name: string, is3d: boolean
 }
 
 const WATER: ByproductInfo = { formula: "H2O", label: "water" };
+const HYDROGEN_CHLORIDE: ByproductInfo = { formula: "HCl", label: "hydrogen chloride" };
 
 export interface RepeatUnitOptions {
   mechanism?: PolymerMechanism;
@@ -149,8 +150,9 @@ export interface MonomerSelection {
 // atoms. Strips hydrogens (the conformer re-adds them and drops the two
 // chain-axis ones). Addition: opens the C=C by reducing the anchor-anchor bond
 // order, so the backbone is single-bonded. Condensation: removes the acid
-// anchor's terminal -OH oxygen (it leaves as water together with the partner
-// anchor's hydrogen) and records the H2O byproduct on the connection.
+// anchor's leaving group (-OH oxygen or Cl; it departs together with the
+// partner anchor's hydrogen) and records the H2O/HCl byproduct on the
+// connection.
 // Returns a molecule-less template (explicitGeometry off) for the conformer
 // polymer path to lay out and align.
 export function deriveRepeatUnit(
@@ -176,15 +178,15 @@ export function deriveRepeatUnit(
 
   if (mechanism === "condensation") {
     const roles = resolveCondensationRoles(atoms, bonds, anchorAId, anchorBId);
-    ({ atoms, bonds } = removeAtom(atoms, bonds, roles.hydroxylOxygenId));
+    ({ atoms, bonds } = removeAtom(atoms, bonds, roles.leaving.leavingAtomId));
     connection = {
       leftAtomId: anchorAId,
       rightAtomId: anchorBId,
       order: 1,
       mechanism: "condensation",
-      byproduct: WATER,
-      leftCap: roles.acidAnchorId === anchorAId ? "OH" : "H",
-      rightCap: roles.acidAnchorId === anchorBId ? "OH" : "H",
+      byproduct: roles.leaving.byproduct,
+      leftCap: roles.acidAnchorId === anchorAId ? roles.leaving.cap : "H",
+      rightCap: roles.acidAnchorId === anchorBId ? roles.leaving.cap : "H",
     };
   } else {
     // Open the anchor valences: reduce a double/triple bond between the anchors by
@@ -228,11 +230,11 @@ export function deriveRepeatUnit(
   };
 }
 
-// Merge two condensation monomers (A-A + B-B, e.g. diol + diacid) into one
-// combined A-B repeat unit: an internal condensation bond joins A's second
-// anchor to B's first anchor (releasing one water per unit), and the
-// connection joins A's first anchor to B's second anchor across units
-// (releasing one water per link). The chain tiles as -A-B-A-B-.
+// Merge two condensation monomers (A-A + B-B, e.g. diol + diacid or diamine +
+// diacyl chloride) into one combined A-B repeat unit: an internal condensation
+// bond joins A's second anchor to B's first anchor (releasing one byproduct
+// per unit), and the connection joins A's first anchor to B's second anchor
+// across units (releasing one byproduct per link). The chain tiles as -A-B-A-B-.
 export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelection): PolymerTemplate {
   const partA = prepareMonomerPart(a, "A");
   const partB = prepareMonomerPart(b, "B");
@@ -246,15 +248,16 @@ export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelec
   let atoms = [...partA.atoms, ...partB.atoms];
   let bonds = [...partA.bonds, ...partB.bonds];
 
-  // Internal condensation bond: A.anchorB - B.anchorA (one H2O per unit).
+  // Internal condensation bond: A.anchorB - B.anchorA (one byproduct per unit).
   const internalRoles = resolveCondensationRoles(atoms, bonds, partA.anchorB, partB.anchorA);
-  ({ atoms, bonds } = removeAtom(atoms, bonds, internalRoles.hydroxylOxygenId));
+  ({ atoms, bonds } = removeAtom(atoms, bonds, internalRoles.leaving.leavingAtomId));
   bonds.push({ id: "cond-internal", a: partA.anchorB, b: partB.anchorA, order: 1 });
 
-  // Inter-unit connection: A.anchorA - B.anchorB (one H2O per link). The acid
-  // side loses its -OH now; the chain-end cap restores it on the last unit.
+  // Inter-unit connection: A.anchorA - B.anchorB (one byproduct per link). The
+  // acid side loses its leaving group now; the chain-end cap restores it on the
+  // last unit.
   const linkRoles = resolveCondensationRoles(atoms, bonds, partA.anchorA, partB.anchorB);
-  ({ atoms, bonds } = removeAtom(atoms, bonds, linkRoles.hydroxylOxygenId));
+  ({ atoms, bonds } = removeAtom(atoms, bonds, linkRoles.leaving.leavingAtomId));
 
   const nameA = a.template.name || "monomer A";
   const nameB = b.template.name || "monomer B";
@@ -282,11 +285,11 @@ export function combineCondensationMonomers(a: MonomerSelection, b: MonomerSelec
       rightAtomId: partB.anchorB,
       order: 1,
       mechanism: "condensation",
-      byproduct: WATER,
-      leftCap: linkRoles.acidAnchorId === partA.anchorA ? "OH" : "H",
-      rightCap: linkRoles.acidAnchorId === partB.anchorB ? "OH" : "H",
+      byproduct: linkRoles.leaving.byproduct,
+      leftCap: linkRoles.acidAnchorId === partA.anchorA ? linkRoles.leaving.cap : "H",
+      rightCap: linkRoles.acidAnchorId === partB.anchorB ? linkRoles.leaving.cap : "H",
     },
-    byproductSites: [{ bondId: "cond-internal", byproduct: WATER }],
+    byproductSites: [{ bondId: "cond-internal", byproduct: internalRoles.leaving.byproduct }],
     explicitGeometry: false,
     atoms,
     bonds,
@@ -425,17 +428,26 @@ function removeAtom(
   };
 }
 
+/** The acid carbon's leaving group: a -COOH loses its -OH oxygen (releasing
+ *  water), a -COCl loses its Cl (releasing HCl). The cap restores the group
+ *  on the last chain end. */
+export interface AcidLeavingGroup {
+  leavingAtomId: string;
+  cap: "OH" | "Cl";
+  byproduct: ByproductInfo;
+}
+
 interface CondensationRoles {
-  /** The carboxylic-acid carbon; its terminal -OH oxygen leaves as water. */
+  /** The acid carbon (-COOH or -COCl); its leaving group departs as byproduct. */
   acidAnchorId: string;
   /** The alcohol oxygen or amine nitrogen that stays in the chain. */
   partnerAnchorId: string;
-  hydroxylOxygenId: string;
+  leaving: AcidLeavingGroup;
 }
 
 // Shared classification of condensation-reactive sites on a hydrogen-stripped
-// graph: carboxylic-acid carbons and their -OH oxygens, plus alcohol/amine
-// partner atoms.
+// graph: acid carbons (-COOH / -COCl) and their leaving groups, plus
+// alcohol/amine partner atoms.
 // Shared definition of "what can condense", used by the derive/combine
 // chemistry, stage-time validation, and the UI's anchor auto-suggestions.
 export function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond[]) {
@@ -445,9 +457,10 @@ export function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond
       .filter((bond) => bond.a === atomId || bond.b === atomId)
       .map((bond) => ({ otherId: bond.a === atomId ? bond.b : bond.a, order: bond.order }));
 
-  // A carboxylic-acid carbon carries a double-bonded O and a terminal
-  // single-bonded O (the -OH). Returns that hydroxyl oxygen's id.
-  const findAcidHydroxyl = (anchorId: string): string | null => {
+  // An acid-like carbon carries a double-bonded O plus a leaving group: a
+  // terminal single-bonded O (-COOH, leaves as water) or a terminal Cl
+  // (-COCl, leaves as HCl).
+  const findAcidLeavingGroup = (anchorId: string): AcidLeavingGroup | null => {
     if (elementById.get(anchorId) !== "C") return null;
     const neighbors = neighborsOf(anchorId);
     const hasCarbonyl = neighbors.some((n) => n.order === 2 && elementById.get(n.otherId) === "O");
@@ -455,7 +468,10 @@ export function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond
     const hydroxyl = neighbors.find(
       (n) => n.order === 1 && elementById.get(n.otherId) === "O" && neighborsOf(n.otherId).length === 1,
     );
-    return hydroxyl ? hydroxyl.otherId : null;
+    if (hydroxyl) return { leavingAtomId: hydroxyl.otherId, cap: "OH", byproduct: WATER };
+    const chloride = neighbors.find((n) => n.order === 1 && elementById.get(n.otherId) === "Cl");
+    if (chloride) return { leavingAtomId: chloride.otherId, cap: "Cl", byproduct: HYDROGEN_CHLORIDE };
+    return null;
   };
 
   const isPartner = (anchorId: string): boolean => {
@@ -468,60 +484,60 @@ export function condensationSiteTools(atoms: TemplateAtom[], bonds: TemplateBond
     return false;
   };
 
-  return { findAcidHydroxyl, isPartner };
+  return { findAcidLeavingGroup, isPartner };
 }
 
 // Early validation for the two-monomer flow: each of monomer A's picked
-// anchors must be a condensation-reactive site (a -COOH carbon with its -OH
-// intact, an -OH oxygen, or an -NH2 nitrogen), so bad picks error when the
-// student stages monomer A instead of later at Combine.
+// anchors must be a condensation-reactive site (a -COOH or -COCl carbon with
+// its leaving group intact, an -OH oxygen, or an -NH2 nitrogen), so bad picks
+// error when the student stages monomer A instead of later at Combine.
 export function assertCondensationAnchors(molecule: PolymerTemplate, anchorAId: string, anchorBId: string): void {
   if (anchorAId === anchorBId) throw new Error("Pick two different anchor atoms.");
   const { atoms, bonds } = dropHydrogens(molecule);
-  const { findAcidHydroxyl, isPartner } = condensationSiteTools(atoms, bonds);
+  const { findAcidLeavingGroup, isPartner } = condensationSiteTools(atoms, bonds);
   for (const [which, anchorId] of [
     ["Anchor 1", anchorAId],
     ["Anchor 2", anchorBId],
   ] as const) {
-    if (!findAcidHydroxyl(anchorId) && !isPartner(anchorId)) {
+    if (!findAcidLeavingGroup(anchorId) && !isPartner(anchorId)) {
       throw new Error(
-        `${which} cannot react in a condensation: pick a -COOH carbon (with its -OH still attached), an -OH oxygen, or an -NH2 nitrogen.`,
+        `${which} cannot react in a condensation: pick a -COOH or -COCl carbon (with its -OH or -Cl still attached), an -OH oxygen, or an -NH2 nitrogen.`,
       );
     }
   }
 }
 
-// Decide which of the two picked anchors is the carboxylic-acid carbon and
-// which is the alcohol -OH oxygen / amine -NH2 nitrogen, working on the
+// Decide which of the two picked anchors is the acid carbon (-COOH / -COCl)
+// and which is the alcohol -OH oxygen / amine -NH2 nitrogen, working on the
 // hydrogen-stripped graph. Throws descriptive errors for unusable picks.
 function resolveCondensationRoles(atoms: TemplateAtom[], bonds: TemplateBond[], anchorAId: string, anchorBId: string): CondensationRoles {
-  const { findAcidHydroxyl, isPartner } = condensationSiteTools(atoms, bonds);
+  const { findAcidLeavingGroup, isPartner } = condensationSiteTools(atoms, bonds);
 
-  const hydroxylFromA = findAcidHydroxyl(anchorAId);
-  const hydroxylFromB = findAcidHydroxyl(anchorBId);
+  const leavingFromA = findAcidLeavingGroup(anchorAId);
+  const leavingFromB = findAcidLeavingGroup(anchorBId);
 
-  if (hydroxylFromA && hydroxylFromB) {
+  if (leavingFromA && leavingFromB) {
     throw new Error(
-      "Both anchors are acid carbons (-COOH). Condensation needs an -OH or -NH2 partner — use the two-monomer flow with a diol or diamine.",
+      "Both anchors are acid carbons (-COOH / -COCl). Condensation needs an -OH or -NH2 partner — use the two-monomer flow with a diol or diamine.",
     );
   }
-  const acidAnchorId = hydroxylFromA ? anchorAId : hydroxylFromB ? anchorBId : null;
-  const hydroxylOxygenId = hydroxylFromA ?? hydroxylFromB;
-  if (!acidAnchorId || !hydroxylOxygenId) {
+  const acidAnchorId = leavingFromA ? anchorAId : leavingFromB ? anchorBId : null;
+  const leaving = leavingFromA ?? leavingFromB;
+  if (!acidAnchorId || !leaving) {
     throw new Error(
-      "Neither anchor is a carboxylic-acid carbon. Pick the C of a -COOH group as one anchor (it must still have its -OH).",
+      "Neither anchor is an acid carbon. Pick the C of a -COOH or -COCl group as one anchor (it must still have its -OH or -Cl).",
     );
   }
   const partnerAnchorId = acidAnchorId === anchorAId ? anchorBId : anchorAId;
-  if (hydroxylOxygenId === partnerAnchorId) {
-    throw new Error("The two anchors belong to the same -COOH group. Pick an -OH or -NH2 elsewhere on the molecule.");
+  if (leaving.leavingAtomId === partnerAnchorId) {
+    throw new Error("The two anchors belong to the same acid group. Pick an -OH or -NH2 elsewhere on the molecule.");
   }
   if (!isPartner(partnerAnchorId)) {
     throw new Error(
-      "The second anchor must be a hydroxyl oxygen (-OH) or amine nitrogen (-NH2) so it can bond to the acid carbon and release water.",
+      "The second anchor must be a hydroxyl oxygen (-OH) or amine nitrogen (-NH2) so it can bond to the acid carbon and release the byproduct.",
     );
   }
-  return { acidAnchorId, partnerAnchorId, hydroxylOxygenId };
+  return { acidAnchorId, partnerAnchorId, leaving };
 }
 
 function detectFormat(source: string, format: StructureImportFormat): Exclude<StructureImportFormat, "auto"> {

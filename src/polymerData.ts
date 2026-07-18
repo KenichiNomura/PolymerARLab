@@ -2,17 +2,21 @@ export type AtomSymbol = "H" | "C" | "N" | "O" | "S" | "P" | "F" | "Cl" | "Br" |
 export type BondOrder = 1 | 2 | 3 | "aromatic";
 
 /** How monomers join: addition opens a multiple bond; condensation expels a
- *  small byproduct molecule (water) each time a link bond forms. */
+ *  small byproduct molecule (water or HCl) each time a link bond forms. */
 export type PolymerMechanism = "addition" | "condensation";
 
+/** H2O from a -COOH acid; HCl from a -COCl acyl chloride. */
+export type ByproductFormula = "H2O" | "HCl";
+
 export interface ByproductInfo {
-  formula: "H2O";
+  formula: ByproductFormula;
   label: string;
 }
 
-/** What a chain-end anchor regains when capped: a plain hydrogen, or a full
- *  hydroxyl for a condensation acid carbon (so the end reads -COOH, not -CHO). */
-export type ChainCapKind = "H" | "OH";
+/** What a chain-end anchor regains when capped: a plain hydrogen, a full
+ *  hydroxyl for a condensation acid carbon (so the end reads -COOH, not -CHO),
+ *  or a chlorine for an acyl-chloride carbon (the end reads -COCl again). */
+export type ChainCapKind = "H" | "OH" | "Cl";
 
 /** One byproduct molecule released by a formed link bond, referencing the two
  *  graph atoms it departed from. Metadata only — never part of atoms/bonds, so
@@ -22,7 +26,7 @@ export interface ByproductSite {
   atomA: string;
   atomB: string;
   unit: number;
-  formula: "H2O";
+  formula: ByproductFormula;
 }
 
 /** Free-floating caption sprite in molecule space (e.g. "A"/"B" over the
@@ -125,7 +129,7 @@ export interface MolecularGraph {
   bonds: GraphBond[];
   groups: GraphGroup[];
   warnings: string[];
-  /** Water molecules released while forming this chain (condensation only). */
+  /** Small molecules (H2O/HCl) released while forming this chain (condensation only). */
   byproducts: ByproductSite[];
   /** Caption sprites (e.g. "A"/"B" over the monomer pair preview). */
   tags?: SceneTag[];
@@ -292,10 +296,12 @@ export function generatePolymerGraph(
 // (opposite the average direction of its existing neighbors). `fallbackSign`
 // aims the cap along the chain axis (+/-x) if the neighbor geometry is
 // degenerate. Cap kinds: "H" adds one hydrogen; "OH" adds a hydroxyl so a
-// condensation acid carbon reads -COOH again instead of an aldehyde.
+// condensation acid carbon reads -COOH again instead of an aldehyde; "Cl" adds
+// a chlorine so an acyl-chloride carbon reads -COCl again.
 const CHAIN_CAP_BOND = 1.09;
 const CHAIN_CAP_CO_BOND = 1.36;
 const CHAIN_CAP_OH_BOND = 0.96;
+const CHAIN_CAP_CCL_BOND = 1.79;
 
 function capChainEnd(
   atoms: GraphAtom[],
@@ -335,14 +341,15 @@ function capChainEnd(
   }
   const unitDir: [number, number, number] = [dir[0] / length, dir[1] / length, dir[2] / length];
 
-  if (kind === "H") {
+  if (kind === "H" || kind === "Cl") {
+    const bondLength = kind === "H" ? CHAIN_CAP_BOND : CHAIN_CAP_CCL_BOND;
     const capPosition: [number, number, number] = [
-      anchor.position[0] + unitDir[0] * CHAIN_CAP_BOND,
-      anchor.position[1] + unitDir[1] * CHAIN_CAP_BOND,
-      anchor.position[2] + unitDir[2] * CHAIN_CAP_BOND,
+      anchor.position[0] + unitDir[0] * bondLength,
+      anchor.position[1] + unitDir[1] * bondLength,
+      anchor.position[2] + unitDir[2] * bondLength,
     ];
     const capId = `cap:${anchorId}`;
-    atoms.push({ id: capId, templateAtomId: "chain-cap", element: "H", position: capPosition, unit: anchor.unit, label: "H" });
+    atoms.push({ id: capId, templateAtomId: "chain-cap", element: kind, position: capPosition, unit: anchor.unit, label: kind });
     bonds.push({ id: `capbond:${anchorId}`, templateBondId: "chain-cap", a: anchorId, b: capId, order: 1, unit: anchor.unit });
     return;
   }

@@ -9,6 +9,7 @@ import {
   elementLabels,
   generatePolymerGraph,
   summarizeBondOrders,
+  type ByproductSite,
   type MolecularGraph,
   type PolymerMechanism,
   type PolymerTemplate,
@@ -137,7 +138,7 @@ const MECHANISM_HINTS: Record<PolymerMechanism, string> = {
   addition:
     "Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.",
   condensation:
-    "Pick the -COOH carbon as one anchor and the -OH oxygen (or -NH2 nitrogen) as the other; each new bond releases a water molecule.",
+    "Pick a -COOH or -COCl carbon as one anchor and the -OH oxygen (or -NH2 nitrogen) as the other; each new bond releases water or HCl.",
 };
 
 function showBuilderStatus(message: string, isError = false) {
@@ -330,13 +331,20 @@ function updateThreeGraph() {
   }
 }
 
+// "4 H2O", "5 HCl", or "2 H2O + 2 HCl" for a mixed chain.
+function summarizeByproducts(sites: ByproductSite[]): string {
+  const counts = new Map<string, number>();
+  for (const site of sites) counts.set(site.formula, (counts.get(site.formula) ?? 0) + 1);
+  return [...counts.entries()].map(([formula, count]) => `${count} ${formula}`).join(" + ");
+}
+
 function updateSummary() {
   if (!currentGraph) return;
   const bondSummary = summarizeBondOrders(currentGraph);
   const modeLabel = isPolymerMode() ? "Polymer" : "Molecule";
   const structureLabel = isPolymerMode() ? currentTemplate.repeatLabel : currentTemplate.name;
   const repeatText = isPolymerMode() ? ` | n=${currentGraph.repeatCount}` : "";
-  const byproductText = currentGraph.byproducts.length ? ` | releases ${currentGraph.byproducts.length} H2O` : "";
+  const byproductText = currentGraph.byproducts.length ? ` | releases ${summarizeByproducts(currentGraph.byproducts)}` : "";
   structureSummary.textContent =
     `${modeLabel}: ${structureLabel}${repeatText} | ${currentGraph.atoms.length} atoms | ${currentGraph.bonds.length} bonds${byproductText}\n` +
     `single ${bondSummary.single} | double ${bondSummary.double} | triple ${bondSummary.triple} | aromatic ${bondSummary.aromatic}`;
@@ -454,8 +462,9 @@ function populateAnchorControls(template: PolymerTemplate, options: { onlyPrefix
 
 // Suggest sensible anchors for the active mechanism: the first double/triple
 // bond for addition (the vinyl case); for condensation, reactive sites in
-// -COOH-carbon / -OH / -NH2 order, so a hydroxy acid gets acid + partner and a
-// diacid or diol gets its two like groups. The user can still re-pick anything.
+// acid-carbon (-COOH / -COCl) / -OH / -NH2 order, so a hydroxy acid gets acid +
+// partner and a diacid or diol gets its two like groups. The user can still
+// re-pick anything.
 function applyAnchorPreselect(template: PolymerTemplate) {
   const heavy = template.atoms.filter(
     (atom) => atom.element !== "H" && (!anchorPrefixFilter || atom.id.startsWith(anchorPrefixFilter)),
@@ -467,18 +476,18 @@ function applyAnchorPreselect(template: PolymerTemplate) {
     // the suggestions can never disagree with what validation accepts.
     const heavyIds = new Set(heavy.map((atom) => atom.id));
     const heavyBonds = template.bonds.filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b));
-    const { findAcidHydroxyl, isPartner } = condensationSiteTools(heavy, heavyBonds);
+    const { findAcidLeavingGroup, isPartner } = condensationSiteTools(heavy, heavyBonds);
 
     const acidCarbons: string[] = [];
-    const acidHydroxyls = new Set<string>();
+    const leavingAtoms = new Set<string>();
     for (const atom of heavy) {
-      const hydroxyl = findAcidHydroxyl(atom.id);
-      if (hydroxyl) {
+      const leaving = findAcidLeavingGroup(atom.id);
+      if (leaving) {
         acidCarbons.push(atom.id);
-        acidHydroxyls.add(hydroxyl);
+        leavingAtoms.add(leaving.leavingAtomId);
       }
     }
-    const partners = heavy.filter((atom) => !acidHydroxyls.has(atom.id) && isPartner(atom.id)).map((atom) => atom.id);
+    const partners = heavy.filter((atom) => !leavingAtoms.has(atom.id) && isPartner(atom.id)).map((atom) => atom.id);
 
     // Acid + partner (hydroxy/amino acid), two acids (diacid), two partners
     // (diol/diamine) — in that order of preference.
@@ -610,7 +619,7 @@ function makeRepeatUnit() {
     showBuilderStatus(`${derived.name} - drag Repeats to grow the chain.`);
     showStatus(
       builder.mechanism === "condensation"
-        ? "Polymer built; every new bond releases one H2O. Adjust Repeats to grow the chain."
+        ? `Polymer built; every new bond releases one ${derived.connection.byproduct?.formula ?? "H2O"}. Adjust Repeats to grow the chain.`
         : "Polymer built; adjust Repeats to grow the chain.",
     );
   } catch (error) {
