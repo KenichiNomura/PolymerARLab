@@ -64,15 +64,17 @@ is `src/aiRecognition.ts`.
 The offline fallback is `src/sketchRecognition.ts`, an MVP recognizer with
 classical browser-side computer vision (no model download):
 
-1. Otsu binarization of the captured frame (downscaled to <=720px).
+1. Adaptive local binarization of the captured frame (downscaled to <=720px).
 2. Connected-component analysis with PCA elongation and hole counting.
-3. Letter blobs are classified against glyph templates rendered at runtime
+3. Compact paired dots beside a confidently read O/N/S/P are identified as
+   lone-pair annotations and excluded from molecular connectivity.
+4. Letter blobs are classified against glyph templates rendered at runtime
    from system fonts (C, H, O, N, S, P, F, I, B, l, r), gated by hole count.
-4. Straight strokes become bond segments; connected zigzags, chevrons, and
+5. Straight strokes become bond segments; connected zigzags, chevrons, and
    junction strokes are decomposed via BFS path tracing plus Douglas-Peucker
    simplification.
-5. Nearly parallel overlapping segments group into double/triple bonds.
-6. Segments attach to the nearest atom label; endpoints with no label become
+6. Nearly parallel overlapping segments group into double/triple bonds.
+7. Segments attach to the nearest atom label; endpoints with no label become
    implicit carbons (with a warning), so skeletal notation partially works.
 
 Known v1 limits:
@@ -81,8 +83,15 @@ Known v1 limits:
 - bond lines must not touch the atom letters;
 - aromatic ring circles and polymer brackets are not detected yet (polymer
   hints are never emitted, so scans import in molecule mode);
+- paired lone-electron dots are ignored for connectivity, but radicals and
+  formal-charge annotations are not interpreted yet;
 - two-letter labels must be written left to right (Cl, Br).
 
 Every recognition result carries per-atom/per-bond confidence and warnings.
 The recognized graph JSON is imported directly into the model; its atom/bond
 counts and any valence warnings surface in the Status panel for review.
+Because a scan represents one primary structure, a disconnected component with
+at most one heavy atom is removed when another component has at least four
+heavy atoms. The scan status reports every removed fragment. This cleanup is
+not applied to manually entered SMILES, where disconnected fragments may be
+intentional.

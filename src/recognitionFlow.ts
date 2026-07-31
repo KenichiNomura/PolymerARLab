@@ -1,4 +1,5 @@
 import { aiAccessToken, aiRecognitionEndpoint, recognizeSketchWithAI } from "./aiRecognition";
+import { pruneTinyGraphFragments, pruneTinySmilesFragments } from "./recognitionCleanup";
 import type { RecognitionSource } from "./scannerContract";
 import { recognizeSketch, recognizedStructureToImportJson } from "./scannerPipeline";
 import type { StructureImportFormat } from "./structureImport";
@@ -25,12 +26,17 @@ export async function runSketchRecognition(source: RecognitionSource, options: R
     showScanStatus("AI recognition (Claude) in progress...");
     try {
       const ai = await recognizeSketchWithAI(options.canvas, endpoint);
+      const cleaned = pruneTinySmilesFragments(ai.smiles);
       options.setPolymerMode(ai.isRepeatUnit);
       const repeatOverride = ai.isRepeatUnit && ai.repeatCount > 0 ? ai.repeatCount : undefined;
-      const outcome = await options.importStructure(ai.smiles, "smiles", { repeatOverride });
-      if (!outcome.ok) throw new Error(`the recognized SMILES "${ai.smiles}" did not import (${outcome.message})`);
-      const notes = ai.notes.length > 0 ? ` ${ai.notes.join(" ")}` : "";
-      showScanStatus(`AI recognition: ${ai.smiles} (confidence ${(ai.confidence * 100).toFixed(0)}%).${notes}`, ai.notes.length > 0);
+      const outcome = await options.importStructure(cleaned.value, "smiles", { repeatOverride });
+      if (!outcome.ok) throw new Error(`the recognized SMILES "${cleaned.value}" did not import (${outcome.message})`);
+      const allNotes = [...ai.notes, ...cleaned.warnings];
+      const notes = allNotes.length > 0 ? ` ${allNotes.join(" ")}` : "";
+      showScanStatus(
+        `AI recognition: ${cleaned.value} (confidence ${(ai.confidence * 100).toFixed(0)}%).${notes}`,
+        allNotes.length > 0,
+      );
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -40,7 +46,8 @@ export async function runSketchRecognition(source: RecognitionSource, options: R
 
   showScanStatus("Recognizing sketch...");
   try {
-    const recognized = await recognizeSketch(options.canvas, source);
+    const cleanup = pruneTinyGraphFragments(await recognizeSketch(options.canvas, source));
+    const recognized = cleanup.value;
     options.setPolymerMode(recognized.polymer?.isRepeatUnit ?? false);
     await options.importStructure(recognizedStructureToImportJson(recognized), "json");
     const confidence = `Recognition confidence ${(recognized.confidence * 100).toFixed(0)}%.`;

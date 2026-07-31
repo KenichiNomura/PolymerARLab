@@ -4,6 +4,7 @@ import { createCameraOverlay } from "./cameraOverlay";
 import { conformerResourcesReady, preloadConformerResources, templateTo3D } from "./conformer3d";
 import { renderFallbackGraph } from "./fallback2d";
 import { buildUFFData, buildUFFInput, downloadTextFile } from "./lammpsExport";
+import { classifyLoadInput } from "./loadInput";
 import { isIOSDevice } from "./platform";
 import {
   elementLabels,
@@ -641,20 +642,29 @@ function activatePolymerTemplate(derived: PolymerTemplate) {
   rebuildGraph();
 }
 
-// Fetch a molecule from PubChem by CID or name and render it with PubChem's own
-// 3D coordinates (see buildMoleculeTemplate3D / explicitGeometry). Both the
-// Edit panel and the polymer builder feed their input value through here.
-async function loadFromPubChem(query: string) {
-  query = query.trim();
-  if (!query) {
-    showImportStatus("Enter a PubChem name or CID.");
+// Shared loader for both the Edit panel and polymer builder. Clear structural
+// syntax is treated as SMILES; ordinary names/CIDs retain the existing PubChem
+// path. `smiles:` and `pubchem:` resolve intentionally ambiguous short input.
+async function loadFromInput(rawInput: string) {
+  let input: ReturnType<typeof classifyLoadInput>;
+  try {
+    input = classifyLoadInput(rawInput);
+  } catch (error) {
+    showImportStatus(error instanceof Error ? error.message : String(error));
     return;
   }
+
   pubchemLoadBtn.disabled = true;
   builderPubchemLoadBtn.disabled = true;
-  showImportStatus(`Looking up "${query}" on PubChem...`);
   try {
-    const cid = await resolveCid(query);
+    if (input.kind === "smiles") {
+      showImportStatus(`Loading SMILES "${input.value}"...`);
+      await loadImportedStructure(input.value, "smiles");
+      return;
+    }
+
+    showImportStatus(`Looking up "${input.value}" on PubChem...`);
+    const cid = await resolveCid(input.value);
     const { sdf, is3d, title } = await fetchCompound(cid);
     const template = buildMoleculeTemplate3D(sdf, title, is3d);
     showImportedTemplate(template, `Loaded PubChem CID ${cid}: ${title}.`);
@@ -666,7 +676,7 @@ async function loadFromPubChem(query: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     showImportStatus(message);
-    showStatus(`PubChem load failed: ${message}`, true);
+    showStatus(`Structure load failed: ${message}`, true);
   } finally {
     pubchemLoadBtn.disabled = false;
     builderPubchemLoadBtn.disabled = false;
@@ -803,21 +813,21 @@ window.addEventListener("resize", () => {
 });
 
 pubchemLoadBtn.addEventListener("click", () => {
-  void loadFromPubChem(pubchemInput.value);
+  void loadFromInput(pubchemInput.value);
 });
 pubchemInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    void loadFromPubChem(pubchemInput.value);
+    void loadFromInput(pubchemInput.value);
   }
 });
 builderPubchemLoadBtn.addEventListener("click", () => {
-  void loadFromPubChem(builderPubchemInput.value);
+  void loadFromInput(builderPubchemInput.value);
 });
 builderPubchemInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    void loadFromPubChem(builderPubchemInput.value);
+    void loadFromInput(builderPubchemInput.value);
   }
 });
 builderSketchBtn.addEventListener("click", () => sketchFileInput.click());

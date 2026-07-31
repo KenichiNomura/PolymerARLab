@@ -1,5 +1,6 @@
 import type { AtomSymbol, BondOrder } from "./polymerData";
 import type { RecognitionSource, RecognizedAtom, RecognizedBond, RecognizedStructure } from "./scannerContract";
+import { matchLonePairDots } from "./lonePairAnnotations";
 
 // Browser-side recognizer for clean black-marker Lewis structures on light
 // paper. Classical computer vision only (no model download): binarize the
@@ -71,11 +72,13 @@ const MIN_LINE_LENGTH = 16;
 export function recognizeSketchImage(image: ImageData, source: RecognitionSource): RecognizedStructure {
   const warnings: string[] = [];
   const mask = binarize(image);
-  const components = findComponents(mask, image.width, image.height).filter(
+  const rawComponents = findComponents(mask, image.width, image.height).filter(
     (component) => component.area >= MIN_COMPONENT_AREA,
   );
+  const annotationAnalysis = removeLonePairAnnotations(rawComponents, mask, image.width);
+  const components = annotationAnalysis.components;
 
-  if (components.length === 0) {
+  if (rawComponents.length === 0) {
     throw new Error(
       "No ink was found in the capture. Use a dark marker on light paper, fill the frame with the sketch, and avoid shadows.",
     );
@@ -140,13 +143,20 @@ export function recognizeSketchImage(image: ImageData, source: RecognitionSource
 // Exposed for diagnostics and threshold tuning (see scratch test harnesses).
 export function debugSketchAnalysis(image: ImageData) {
   const mask = binarize(image);
-  const components = findComponents(mask, image.width, image.height).filter(
+  const rawComponents = findComponents(mask, image.width, image.height).filter(
     (component) => component.area >= MIN_COMPONENT_AREA,
   );
+  const annotationAnalysis = removeLonePairAnnotations(rawComponents, mask, image.width);
+  const components = annotationAnalysis.components;
   const { letterComponents, lineComponents, bentStrokes, ignored } = splitComponents(components);
   const glyphs = letterComponents.map((component) => classifyGlyph(component, mask, image.width));
   return {
     inkPixels: mask.reduce((sum, value) => sum + value, 0),
+    lonePairCount: annotationAnalysis.lonePairCount,
+    lonePairComponents: annotationAnalysis.annotationComponents.map((component) => ({
+      bbox: [component.minX, component.minY, component.maxX, component.maxY],
+      area: component.area,
+    })),
     components: components.map((component) => ({
       bbox: [component.minX, component.minY, component.maxX, component.maxY],
       area: component.area,
@@ -470,6 +480,83 @@ function splitComponents(components: InkComponent[]) {
     letterComponents.push(component);
   }
   return { letterComponents, lineComponents, bentStrokes, ignored };
+}
+
+// Lewis structures often draw a lone pair as two compact dots beside a
+// heteroatom. Those dots carry electron information, but they are not atoms or
+// bonds and must not enter glyph classification or become implicit carbons.
+//
+// Detection is deliberately conservative: a component must be small relative
+// to the drawing's letter scale, have a similarly sized nearby partner, and
+// the pair must sit close to a confidently classified O/N/S/P glyph. Unpaired
+// dots and small marks away from heteroatoms remain in the normal pipeline.
+function removeLonePairAnnotations(
+  components: InkComponent[],
+  mask: Uint8Array,
+  width: number,
+): { components: InkComponent[]; annotationComponents: InkComponent[]; lonePairCount: number } {
+  if (components.length < 3) {
+    return { components, annotationComponents: [], lonePairCount: 0 };
+  }
+
+  const compactSizes = components
+    .filter((component) => component.holes === 0 && component.elongation <= 2.8)
+    .map(componentSize)
+    .filter((size) => size >= 6)
+    .sort((a, b) => a - b);
+  const glyphScale = percentile(compactSizes, 0.75);
+  if (glyphScale < 10) {
+    return { components, annotationComponents: [], lonePairCount: 0 };
+  }
+
+  const maxDotSize = Math.max(7, glyphScale * 0.45);
+  const maxDotArea = Math.max(36, glyphScale * glyphScale * 0.16);
+  const dotCandidates = components.filter((component) => {
+    const aspect = component.width / Math.max(1, component.height);
+    return (
+      component.holes === 0 &&
+      component.elongation <= 2.2 &&
+      aspect >= 0.45 &&
+      aspect <= 2.2 &&
+      componentSize(component) <= maxDotSize &&
+      component.area <= maxDotArea
+    );
+  });
+  if (dotCandidates.length < 2) {
+    return { components, annotationComponents: [], lonePairCount: 0 };
+  }
+
+  const dotSet = new Set(dotCandidates);
+  const provisional = splitComponents(components.filter((component) => !dotSet.has(component)));
+  const heteroatoms = provisional.letterComponents
+    .map((component) => classifyGlyph(component, mask, width))
+    .filter((glyph) => ["O", "N", "S", "P"].includes(glyph.char) && glyph.score >= 0.45);
+  if (heteroatoms.length === 0) {
+    return { components, annotationComponents: [], lonePairCount: 0 };
+  }
+
+  const matched = matchLonePairDots(
+    dotCandidates,
+    heteroatoms.map((glyph) => glyph.component),
+    glyphScale,
+  );
+  const annotationSet = new Set(matched.annotationComponents);
+
+  return {
+    components: components.filter((component) => !annotationSet.has(component)),
+    annotationComponents: [...annotationSet],
+    lonePairCount: matched.lonePairCount,
+  };
+}
+
+function componentSize(component: InkComponent) {
+  return Math.max(component.width, component.height);
+}
+
+function percentile(sortedValues: number[], fraction: number) {
+  if (sortedValues.length === 0) return 0;
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.floor((sortedValues.length - 1) * fraction)));
+  return sortedValues[index];
 }
 
 // A lowercase l (as in Cl) is a bare vertical stroke that the line classifier

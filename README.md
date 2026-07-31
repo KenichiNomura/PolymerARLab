@@ -15,7 +15,7 @@
 
 1. 📷 **Scan a hand-drawn Lewis structure** — take a photo of your drawing and get a 3-D molecule.
 2. 🧬 **Build a polymer chain** — take one small molecule and repeat it into a long chain.
-3. 🔎 **Look up real molecules** — type a name like *caffeine* and download its real 3-D shape (from PubChem).
+3. 🔎 **Load real molecules** — type a name like *caffeine*, a PubChem CID, or a SMILES string such as `CC(=O)O`.
 4. 💾 **Save a science file** — export a file that the simulation program **LAMMPS** can open to tidy up the shape.
 5. 🥽 **Augmented reality** — stand the molecule up on your real desk through the camera.
 
@@ -60,7 +60,7 @@
 <img src="docs/images/monomer-to-polymer.svg" alt="Start from a monomer, pick its two backbone atoms, the double bond opens, and the unit repeats into a chain" width="100%">
 
 1. **Open the polymer builder.** Tap the **Polymer** 🔗 icon in the bottom-left dock and choose how your polymer cures: **Addition cure** (opens a C=C double bond) or **Condensation cure** (each new bond releases one small molecule — H₂O, or HCl from acyl chlorides). The screen clears so you start fresh.
-2. **Load a monomer.** Type a name in the panel's **PubChem** box — try `ethylene` or `styrene` for addition — and press **Load**. Atom labels turn on automatically so every atom shows its name (C1, C2, …).
+2. **Load a monomer.** Type a PubChem name/CID or a SMILES string — try `ethylene`, `styrene`, or `smiles:C=C` for addition — and press **Load**. Atom labels turn on automatically so every atom shows its name (C1, C2, …). Prefix ambiguous short strings with `smiles:` or `pubchem:`.
 3. **Pick the two anchor atoms** — where the chain will connect (for a vinyl monomer, the two carbons of the double bond) — and press **Make repeat unit**. The molecule copies itself into a chain.
 4. Drag the **Repeats** slider to make the chain longer or shorter.
 

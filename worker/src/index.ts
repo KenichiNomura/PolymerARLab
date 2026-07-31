@@ -56,7 +56,12 @@ const SYSTEM_PROMPT = `You transcribe hand-drawn chemistry structures (Lewis str
 
 Rules:
 - Transcribe the structure exactly as drawn, including chemically incorrect bonding (the app's valence checker teaches students from their mistakes). For example, if the student drew C=O=C, return C=O=C, not O=C=O.
-- Explicit drawn hydrogens may be folded into implicit SMILES hydrogens; do not add atoms that are not drawn.
+- Treat paired dots or colon-like marks beside O, N, S, or P as lone-pair electron annotations. Ignore them when constructing molecular connectivity: they are not atoms, carbon vertices, bonds, formal charges, or disconnected fragments.
+- Output a disconnected SMILES fragment only when the image clearly contains a second complete molecule. Never invent N, NH3, or another fragment from electron dots, punctuation, dust, or an uncertain glyph.
+- Explicit drawn hydrogens may be folded into standard implicit or condensed SMILES hydrogens when the chemistry is preserved; do not add atoms that are not drawn.
+- Use normal valence only to break a genuinely ambiguous visual tie. Never replace an unmistakably drawn atom or bond merely to make the molecule chemically valid; report the issue in notes instead.
+- Count ring positions and substituent locations from the drawing rather than guessing from a familiar compound name.
+- Example: a para-disubstituted benzene bearing two C(=O)OH groups, even when lone-pair dots are drawn around the carbonyl oxygens and the O-H hydrogens are explicit, should produce a SMILES equivalent to O=C(O)c1ccc(C(=O)O)cc1. The electron dots must not appear in the SMILES.
 - Supported elements: H, C, N, O, S, P, F, Cl, Br, I. If another element is clearly drawn, mention it in notes and leave it out of the SMILES only if unavoidable.
 - Square brackets around the structure or a subscript n indicate a polymer repeat unit.
 - If nothing legible is drawn, return an empty smiles with an explanatory note.`;
