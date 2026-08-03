@@ -2,6 +2,7 @@ import type {
   AtomSymbol,
   BondOrder,
   ByproductInfo,
+  DieneGeometry,
   PolymerMechanism,
   PolymerTemplate,
   SceneTag,
@@ -136,6 +137,146 @@ const HYDROGEN_CHLORIDE: ByproductInfo = { formula: "HCl", label: "hydrogen chlo
 
 export interface RepeatUnitOptions {
   mechanism?: PolymerMechanism;
+  dieneGeometry?: DieneGeometry;
+}
+
+export type AdditionClassification =
+  | { kind: "direct"; bondId: string }
+  | {
+      kind: "diene-1,4";
+      atomIds: [string, string, string, string];
+      bondIds: [string, string, string];
+    }
+  | { kind: "unsupported" };
+
+const ADDITION_ANCHOR_HINT =
+  "These anchors do not describe a supported addition site. Look for the reactive unsaturated part of the monomer and reconsider which atoms become the chain ends.";
+
+/** Classify user-picked anchors using the same rules as addition derivation. */
+export function classifyAdditionAnchors(
+  molecule: Pick<PolymerTemplate, "atoms" | "bonds">,
+  anchorAId: string,
+  anchorBId: string,
+): AdditionClassification {
+  const atomById = new Map(molecule.atoms.map((atom) => [atom.id, atom]));
+  const anchorA = atomById.get(anchorAId);
+  const anchorB = atomById.get(anchorBId);
+  if (!anchorA || !anchorB || anchorA.element === "H" || anchorB.element === "H" || anchorAId === anchorBId) {
+    return { kind: "unsupported" };
+  }
+
+  const direct = molecule.bonds.find(
+    (bond) =>
+      ((bond.a === anchorAId && bond.b === anchorBId) || (bond.a === anchorBId && bond.b === anchorAId)) &&
+      (bond.order === 2 || bond.order === 3),
+  );
+  if (direct) return { kind: "direct", bondId: direct.id };
+
+  // Carbon-only acyclic conjugated 1,3-diene: A=J-K=B. Substitution on any
+  // of the four backbone carbons is allowed; aromatic/delocalized bonds are not.
+  if (anchorA.element !== "C" || anchorB.element !== "C") return { kind: "unsupported" };
+  const incident = (atomId: string) => molecule.bonds.filter((bond) => bond.a === atomId || bond.b === atomId);
+  const other = (bond: TemplateBond, atomId: string) => (bond.a === atomId ? bond.b : bond.a);
+  const matches: Array<Extract<AdditionClassification, { kind: "diene-1,4" }>> = [];
+
+  for (const leftBond of incident(anchorAId).filter((bond) => bond.order === 2)) {
+    const leftInner = other(leftBond, anchorAId);
+    if (leftInner === anchorBId || atomById.get(leftInner)?.element !== "C") continue;
+    for (const centralBond of incident(leftInner).filter((bond) => bond.order === 1)) {
+      const rightInner = other(centralBond, leftInner);
+      if (
+        rightInner === anchorAId ||
+        rightInner === anchorBId ||
+        rightInner === leftInner ||
+        atomById.get(rightInner)?.element !== "C"
+      ) {
+        continue;
+      }
+      const rightBond = incident(rightInner).find(
+        (bond) => bond.order === 2 && other(bond, rightInner) === anchorBId,
+      );
+      if (!rightBond) continue;
+      // The retained central double must split the repeat unit into two sides;
+      // cyclic conjugated systems need a different polymerization model.
+      if (pathExistsWithoutBond(molecule.bonds, leftInner, rightInner, centralBond.id)) continue;
+      // None of the four backbone atoms may belong to a ring elsewhere in the
+      // molecule either — otherwise a vinyl group conjugated into an aromatic
+      // ring (e.g. styrene) is misread as an isolated diene.
+      if ([anchorAId, leftInner, rightInner, anchorBId].some((id) => isRingAtom(molecule.bonds, id))) continue;
+      matches.push({
+        kind: "diene-1,4",
+        atomIds: [anchorAId, leftInner, rightInner, anchorBId],
+        bondIds: [leftBond.id, centralBond.id, rightBond.id],
+      });
+    }
+  }
+
+  return matches.length === 1 ? matches[0] : { kind: "unsupported" };
+}
+
+/** Prefer a unique diene's terminal atoms, otherwise the first multiple bond. */
+export function suggestAdditionAnchors(molecule: Pick<PolymerTemplate, "atoms" | "bonds">): [string, string] | null {
+  const carbonIds = molecule.atoms.filter((atom) => atom.element === "C").map((atom) => atom.id);
+  const suggestions = new Map<string, [string, string]>();
+  for (let i = 0; i < carbonIds.length; i++) {
+    for (let j = i + 1; j < carbonIds.length; j++) {
+      if (classifyAdditionAnchors(molecule, carbonIds[i], carbonIds[j]).kind !== "diene-1,4") continue;
+      suggestions.set(`${carbonIds[i]}|${carbonIds[j]}`, [carbonIds[i], carbonIds[j]]);
+    }
+  }
+  if (suggestions.size === 1) return [...suggestions.values()][0];
+  const direct = molecule.bonds.find((bond) => bond.order === 2 || bond.order === 3);
+  return direct ? [direct.a, direct.b] : null;
+}
+
+/** True if `atomId` sits on some cycle in the bond graph (a ring member or fusion point). */
+function isRingAtom(bonds: TemplateBond[], atomId: string): boolean {
+  const neighbors = bonds
+    .filter((bond) => bond.a === atomId || bond.b === atomId)
+    .map((bond) => (bond.a === atomId ? bond.b : bond.a));
+  for (let i = 0; i < neighbors.length; i++) {
+    for (let j = i + 1; j < neighbors.length; j++) {
+      if (pathExistsWithoutAtom(bonds, neighbors[i], neighbors[j], atomId)) return true;
+    }
+  }
+  return false;
+}
+
+function pathExistsWithoutAtom(bonds: TemplateBond[], start: string, target: string, excludedAtomId: string): boolean {
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const atomId = queue.shift()!;
+    for (const bond of bonds) {
+      if (bond.a !== atomId && bond.b !== atomId) continue;
+      const next = bond.a === atomId ? bond.b : bond.a;
+      if (next === excludedAtomId) continue;
+      if (next === target) return true;
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+function pathExistsWithoutBond(bonds: TemplateBond[], start: string, target: string, excludedBondId: string): boolean {
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const atomId = queue.shift()!;
+    for (const bond of bonds) {
+      if (bond.id === excludedBondId || (bond.a !== atomId && bond.b !== atomId)) continue;
+      const next = bond.a === atomId ? bond.b : bond.a;
+      if (next === target) return true;
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
 }
 
 /** A loaded monomer plus its two user-picked anchor atoms, staged for the
@@ -189,13 +330,27 @@ export function deriveRepeatUnit(
       rightCap: roles.acidAnchorId === anchorBId ? roles.leaving.cap : "H",
     };
   } else {
-    // Open the anchor valences: reduce a double/triple bond between the anchors by
-    // one (a single or absent bond already leaves open valences after H removal).
-    for (const bond of bonds) {
-      const spansAnchors = (bond.a === anchorAId && bond.b === anchorBId) || (bond.a === anchorBId && bond.b === anchorAId);
-      if (spansAnchors && (bond.order === 2 || bond.order === 3)) {
-        bond.order = (bond.order - 1) as BondOrder;
+    const addition = classifyAdditionAnchors({ atoms, bonds }, anchorAId, anchorBId);
+    if (addition.kind === "unsupported") throw new Error(ADDITION_ANCHOR_HINT);
+    if (addition.kind === "direct") {
+      const bond = bonds.find((candidate) => candidate.id === addition.bondId)!;
+      bond.order = bond.order === 3 ? 2 : 1;
+    } else {
+      const [leftBondId, centralBondId, rightBondId] = addition.bondIds;
+      for (const bond of bonds) {
+        if (bond.id === leftBondId || bond.id === rightBondId) bond.order = 1;
+        if (bond.id === centralBondId) bond.order = 2;
       }
+      connection = {
+        ...connection,
+        addition: {
+          kind: "diene-1,4",
+          geometry: options.dieneGeometry ?? "cis",
+          centralBondId,
+          leftInnerAtomId: addition.atomIds[1],
+          rightInnerAtomId: addition.atomIds[2],
+        },
+      };
     }
   }
 
@@ -204,7 +359,8 @@ export function deriveRepeatUnit(
     anchorA.position[1] - anchorB.position[1],
     anchorA.position[2] - anchorB.position[2],
   );
-  const label = safeLabel(`poly(${molecule.name})`, "Derived repeat unit");
+  const prefix = connection.addition ? `${connection.addition.geometry}-1,4-` : "";
+  const label = safeLabel(`${prefix}poly(${molecule.name})`, "Derived repeat unit");
   return {
     id: IMPORTED_TEMPLATE_ID,
     name: label,
@@ -680,6 +836,24 @@ function parseSmiles(source: string): ParsedStructure {
   let pendingOrder: BondOrder | undefined;
   let index = 0;
 
+  function closeRingMarker(key: string) {
+    const existing = rings.get(key);
+    if (existing) {
+      const start = atoms.find((atom) => atom.id === existing.atomId);
+      const end = atoms.find((atom) => atom.id === currentAtomId);
+      bonds.push({
+        id: `b${bonds.length + 1}`,
+        a: existing.atomId,
+        b: currentAtomId!,
+        order: pendingOrder ?? existing.order ?? inferDefaultBond(start, end),
+      });
+      rings.delete(key);
+    } else {
+      rings.set(key, { atomId: currentAtomId!, order: pendingOrder });
+    }
+    pendingOrder = undefined;
+  }
+
   while (index < source.length) {
     const char = source[index];
 
@@ -726,29 +900,25 @@ function parseSmiles(source: string): ParsedStructure {
     }
     if (/\d/.test(char)) {
       if (!currentAtomId) throw new Error("SMILES ring marker appeared before an atom.");
-      const existing = rings.get(char);
-      if (existing) {
-        const start = atoms.find((atom) => atom.id === existing.atomId);
-        const end = atoms.find((atom) => atom.id === currentAtomId);
-        bonds.push({
-          id: `b${bonds.length + 1}`,
-          a: existing.atomId,
-          b: currentAtomId,
-          order: pendingOrder ?? existing.order ?? inferDefaultBond(start, end),
-        });
-        rings.delete(char);
-      } else {
-        rings.set(char, { atomId: currentAtomId, order: pendingOrder });
-      }
-      pendingOrder = undefined;
+      closeRingMarker(char);
       index += 1;
+      continue;
+    }
+    if (char === "%") {
+      const digits = source.slice(index + 1, index + 3);
+      if (!/^\d{2}$/.test(digits)) {
+        throw new Error(`SMILES ring marker "%" at position ${index + 1} must be followed by two digits.`);
+      }
+      if (!currentAtomId) throw new Error("SMILES ring marker appeared before an atom.");
+      closeRingMarker(digits);
+      index += 3;
       continue;
     }
 
     const parsedAtom = readSmilesAtom(source, index);
     if (!parsedAtom) {
       throw new Error(
-        `Unsupported SMILES token "${char}" at position ${index + 1}. Supported atoms: ${SUPPORTED_ATOM_LIST}; bonds: - = # :; branches ( ); ring closures 0-9.`,
+        `Unsupported SMILES token "${char}" at position ${index + 1}. Supported atoms: ${SUPPORTED_ATOM_LIST}; bonds: - = # :; branches ( ); ring closures 0-9 or %10-%99.`,
       );
     }
 

@@ -7,10 +7,11 @@ export interface ClassifiedLoadInput {
 }
 
 /**
- * Classify the shared Load field while preserving PubChem behavior for
- * ambiguous atom-only strings such as CO. Prefixes always win.
+ * Classify the shared Load field. An explicit prefix always wins; otherwise a
+ * selected source wins; without either, preserve PubChem behavior for
+ * ambiguous atom-only strings such as CO.
  */
-export function classifyLoadInput(rawInput: string): ClassifiedLoadInput {
+export function classifyLoadInput(rawInput: string, preferredKind?: LoadInputKind): ClassifiedLoadInput {
   const input = rawInput.trim();
   if (!input) throw new Error("Enter a PubChem name, CID, or SMILES string.");
 
@@ -24,6 +25,8 @@ export function classifyLoadInput(rawInput: string): ClassifiedLoadInput {
       explicit: true,
     };
   }
+
+  if (preferredKind) return { kind: preferredKind, value: input, explicit: false };
 
   if (isClearSmiles(input)) return { kind: "smiles", value: input, explicit: false };
   return { kind: "pubchem", value: input, explicit: false };

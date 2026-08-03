@@ -4,9 +4,9 @@ import type { AtomSymbol, BondOrder, GraphAtom, MolecularGraph } from "./polymer
 // Export the displayed structure (with hydrogens) as a self-contained LAMMPS
 // setup using a pragmatic, generic UFF-style force field: no external ffield
 // file is needed. Non-reactive, so the full typed topology (atoms, bonds,
-// angles, dihedrals, impropers) plus all coefficients are written. Bond r0/K and
-// per-element van der Waals follow UFF; angle/dihedral/improper force constants
-// are generic (approximate) per the "not super accurate" brief.
+// angles, dihedrals, impropers) plus all coefficients are written. Bond r0/K,
+// per-element van der Waals, and typed torsions follow UFF; angle and improper
+// force constants remain generic approximations.
 
 const ELEMENT_MASS: Record<AtomSymbol, number> = {
   H: 1.008,
@@ -50,6 +50,22 @@ const UFF_ZSTAR: Record<AtomSymbol, number> = {
   I: 2.65,
 };
 
+// UFF torsional parameters: V1 is the sp3 barrier and U1 the sp2 parameter
+// (kcal/mol). Values are selected from the UFF atom types matching the simple
+// hybridization perception used by this exporter.
+const UFF_TORSION: Record<AtomSymbol, { v1: number; u1: number }> = {
+  H: { v1: 0, u1: 0 },
+  C: { v1: 2.119, u1: 2 },
+  N: { v1: 0.45, u1: 2 },
+  O: { v1: 0.018, u1: 2 },
+  F: { v1: 0, u1: 2 },
+  P: { v1: 2.4, u1: 1.25 },
+  S: { v1: 0.484, u1: 1.25 },
+  Cl: { v1: 0, u1: 1.25 },
+  Br: { v1: 0, u1: 0.7 },
+  I: { v1: 0, u1: 0.2 },
+};
+
 type Hybridization = "sp" | "sp2" | "sp3" | "terminal";
 
 // Equilibrium angle (degrees) for a central atom by element + hybridization.
@@ -74,7 +90,7 @@ function equilibriumAngle(element: AtomSymbol, hyb: Hybridization): number {
 const LAMBDA = 0.1332; // UFF bond-order correction coefficient
 const BOND_K_PREFACTOR = 664.12; // kcal/mol/Å for UFF bond force constants
 const ANGLE_K = 100.0; // generic harmonic angle stiffness (kcal/mol/rad^2)
-const DIHEDRAL_K = 0.1; // generic weak torsion barrier (kcal/mol)
+const FALLBACK_DIHEDRAL_V = 0.2; // conservative full barrier (kcal/mol)
 const IMPROPER_K = 10.0; // generic sp2 planarity stiffness (kcal/mol/rad^2)
 const BOX_PADDING = 10; // Ångström of empty space around the molecule.
 
@@ -94,6 +110,89 @@ export interface LammpsData {
 
 function bondOrderNumber(order: BondOrder): number {
   return order === "aromatic" ? 1.5 : order;
+}
+
+interface UFFTorsionParams {
+  /** LAMMPS harmonic coefficient: E = K * (1 + d*cos(n*phi)). */
+  k: number;
+  d: 1 | -1;
+  n: 2 | 3 | 6;
+  rule: string;
+}
+
+function isGroup6(element: AtomSymbol): boolean {
+  return element === "O" || element === "S";
+}
+
+function uffEquation17(a: AtomSymbol, b: AtomSymbol, bondOrder: number): number {
+  return 5 * Math.sqrt(UFF_TORSION[a].u1 * UFF_TORSION[b].u1) * (1 + 4.18 * Math.log(bondOrder));
+}
+
+/** Translate the UFF torsion rules to LAMMPS harmonic K/d/n coefficients. */
+function uffTorsionParams(
+  a: GraphAtom,
+  b: GraphAtom,
+  hybA: Hybridization,
+  hybB: Hybridization,
+  order: BondOrder,
+  endAtomIsSp2: boolean,
+): UFFTorsionParams | null {
+  if ((hybA !== "sp2" && hybA !== "sp3") || (hybB !== "sp2" && hybB !== "sp3")) return null;
+
+  const bondOrder = bondOrderNumber(order);
+  let v: number;
+  let cosTerm: 1 | -1;
+  let n: 2 | 3 | 6;
+  let rule: string;
+
+  if (hybA === "sp3" && hybB === "sp3") {
+    v = Math.sqrt(UFF_TORSION[a.element].v1 * UFF_TORSION[b.element].v1);
+    n = 3;
+    cosTerm = -1;
+    rule = "UFF sp3-sp3";
+    if (bondOrder === 1 && isGroup6(a.element) && isGroup6(b.element)) {
+      const vA = a.element === "O" ? 2 : 6.8;
+      const vB = b.element === "O" ? 2 : 6.8;
+      v = Math.sqrt(vA * vB);
+      n = 2;
+      rule = "UFF group-6 sp3-sp3";
+    }
+  } else if (hybA === "sp2" && hybB === "sp2") {
+    v = uffEquation17(a.element, b.element, bondOrder);
+    n = 2;
+    cosTerm = 1;
+    rule = "UFF sp2-sp2";
+  } else {
+    v = 1;
+    n = 6;
+    cosTerm = 1;
+    rule = "UFF sp2-sp3";
+
+    const sp3Atom = hybA === "sp3" ? a : b;
+    const sp2Atom = hybA === "sp2" ? a : b;
+    if (bondOrder === 1 && isGroup6(sp3Atom.element) && !isGroup6(sp2Atom.element)) {
+      v = uffEquation17(a.element, b.element, bondOrder);
+      n = 2;
+      cosTerm = -1;
+      rule = "UFF group-6 sp3-sp2";
+    } else if (bondOrder === 1 && endAtomIsSp2) {
+      v = 2;
+      n = 3;
+      cosTerm = -1;
+      rule = "UFF conjugated sp3-sp2";
+    }
+  }
+
+  if (!Number.isFinite(v) || v <= 0) {
+    v = FALLBACK_DIHEDRAL_V;
+    n = 3;
+    cosTerm = -1;
+    rule = "fallback (UFF barrier unavailable)";
+  }
+
+  // UFF: E = V/2 * (1 - cosTerm*cos(n*phi)); LAMMPS uses
+  // E = K * (1 + d*cos(n*phi)).
+  return { k: v / 2, d: cosTerm === 1 ? -1 : 1, n, rule };
 }
 
 export function buildUFFData(graph: MolecularGraph, title: string): LammpsData {
@@ -162,24 +261,52 @@ export function buildUFFData(graph: MolecularGraph, title: string): LammpsData {
     }
   }
 
-  // Dihedrals: one generic type over every i-j-k-l across a central bond j-k.
+  // UFF typed dihedrals over every i-j-k-l across central bond j-k. UFF defines
+  // one total barrier per central bond, so split it over the generated terms.
+  const dihedralTypes = new Map<
+    string,
+    { type: number; k: number; d: 1 | -1; n: 2 | 3 | 6; description: string }
+  >();
   const dihedralRows: Array<[number, number, number, number, number]> = [];
   for (const bond of graph.bonds) {
     const jId = bond.a;
     const kId = bond.b;
     const jNbrs = (neighbors.get(jId) ?? []).filter((n) => n.id !== kId);
     const kNbrs = (neighbors.get(kId) ?? []).filter((n) => n.id !== jId);
-    for (const i of jNbrs) {
-      for (const l of kNbrs) {
-        if (i.id === l.id) continue;
+    const candidates = jNbrs.flatMap((i) => kNbrs.filter((l) => i.id !== l.id).map((l) => ({ i, l })));
+    if (candidates.length === 0) continue;
+
+    const j = atoms[indexById.get(jId)!];
+    const k = atoms[indexById.get(kId)!];
+    const hybJ = hybById.get(jId)!;
+    const hybK = hybById.get(kId)!;
+    for (const { i, l } of candidates) {
+      const params = uffTorsionParams(
+        j,
+        k,
+        hybJ,
+        hybK,
+        bond.order,
+        hybById.get(i.id) === "sp2" || hybById.get(l.id) === "sp2",
+      );
+      if (!params) continue;
+
+      const labels = [`${j.element}(${hybJ})`, `${k.element}(${hybK})`].sort();
+      const scaledK = params.k / candidates.length;
+      const description = `${labels.join("-")} order ${bond.order}; ${params.rule}; ${candidates.length} term${candidates.length === 1 ? "" : "s"}/bond`;
+      const key = `${scaledK.toFixed(8)}|${params.d}|${params.n}|${description}`;
+      let entry = dihedralTypes.get(key);
+      if (!entry) {
+        entry = { type: dihedralTypes.size + 1, k: scaledK, d: params.d, n: params.n, description };
+        dihedralTypes.set(key, entry);
+      }
         dihedralRows.push([
-          1,
+          entry.type,
           indexById.get(i.id)! + 1,
           indexById.get(jId)! + 1,
           indexById.get(kId)! + 1,
           indexById.get(l.id)! + 1,
         ]);
-      }
     }
   }
 
@@ -208,7 +335,7 @@ export function buildUFFData(graph: MolecularGraph, title: string): LammpsData {
   L.push(`${elements.length} atom types`);
   L.push(`${bondTypes.size} bond types`);
   L.push(`${angleTypes.size} angle types`);
-  L.push(`${dihedralRows.length > 0 ? 1 : 0} dihedral types`);
+  L.push(`${dihedralTypes.size} dihedral types`);
   L.push(`${improperRows.length > 0 ? 1 : 0} improper types`);
   L.push("");
   L.push(`${fixed(lo[0])} ${fixed(hi[0])} xlo xhi`);
@@ -248,7 +375,11 @@ export function buildUFFData(graph: MolecularGraph, title: string): LammpsData {
 
   if (dihedralRows.length > 0) {
     // harmonic: K, d(+1/-1), n
-    L.push("Dihedral Coeffs # harmonic", "", `1 ${num(DIHEDRAL_K)} 1 3 # generic weak torsion`, "");
+    L.push("Dihedral Coeffs # harmonic", "");
+    for (const entry of dihedralTypes.values()) {
+      L.push(`${entry.type} ${num(entry.k)} ${entry.d} ${entry.n} # ${entry.description}`);
+    }
+    L.push("");
   }
   if (improperRows.length > 0) {
     // umbrella: K, omega0 (deg) — 0 for planar sp2

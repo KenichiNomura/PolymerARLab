@@ -24,4 +24,14 @@ describe("classifyLoadInput", () => {
     expect(() => classifyLoadInput("")).toThrow(/Enter a PubChem name/);
     expect(() => classifyLoadInput("smiles: ")).toThrow(/Enter a value/);
   });
+
+  it("honors a selected source while keeping explicit prefixes authoritative", () => {
+    expect(classifyLoadInput("2,5-dimethyl-1,3,5-hexatriene", "pubchem")).toEqual({
+      kind: "pubchem",
+      value: "2,5-dimethyl-1,3,5-hexatriene",
+      explicit: false,
+    });
+    expect(classifyLoadInput("C=C(C)C=C", "smiles").kind).toBe("smiles");
+    expect(classifyLoadInput("smiles: C=C", "pubchem")).toEqual({ kind: "smiles", value: "C=C", explicit: true });
+  });
 });
