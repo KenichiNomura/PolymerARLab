@@ -1,4 +1,5 @@
 import { ConformerGenerator, Molecule, Resources } from "openchemlib";
+import { enforceDiene14Geometry } from "./dieneGeometry";
 import type { BondOrder, PolymerTemplate } from "./polymerData";
 
 // Real 3D geometry via openchemlib's torsion-library conformer generator.
@@ -69,6 +70,9 @@ export function templateTo3D(template: PolymerTemplate, options: Conformer3DOpti
       return [conformer.getAtomX(atom), conformer.getAtomY(atom), conformer.getAtomZ(atom)];
     });
     let hydrogens = options.includeHydrogens ? collectGeneratedHydrogens(conformer, template, map) : [];
+    const enforced = enforceDiene14Geometry(template, positions, hydrogens);
+    positions = enforced.positions;
+    hydrogens = enforced.attached;
 
     if (options.mode === "polymer") {
       const aligned = alignToConnection(template, positions, hydrogens);

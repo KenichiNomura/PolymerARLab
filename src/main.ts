@@ -4,7 +4,7 @@ import { createCameraOverlay } from "./cameraOverlay";
 import { conformerResourcesReady, preloadConformerResources, templateTo3D } from "./conformer3d";
 import { renderFallbackGraph } from "./fallback2d";
 import { buildUFFData, buildUFFInput, downloadTextFile } from "./lammpsExport";
-import { classifyLoadInput } from "./loadInput";
+import { classifyLoadInput, type LoadInputKind } from "./loadInput";
 import { isIOSDevice } from "./platform";
 import {
   elementLabels,
@@ -33,10 +33,12 @@ import {
   assertCondensationAnchors,
   buildMoleculeTemplate3D,
   buildMonomerPairPreview,
+  classifyAdditionAnchors,
   combineCondensationMonomers,
   condensationSiteTools,
   deriveRepeatUnit,
   importStructure,
+  suggestAdditionAnchors,
   type StructureImportFormat,
 } from "./structureImport";
 import { showImportStatus, showPlatformStatus, showScanStatus, showStatus } from "./ui/status";
@@ -52,6 +54,9 @@ const videoEl = document.getElementById("cameraFeed") as HTMLVideoElement;
 const arEntryEl = document.getElementById("arEntry")!;
 const anchorASelect = document.getElementById("anchorASelect") as HTMLSelectElement;
 const anchorBSelect = document.getElementById("anchorBSelect") as HTMLSelectElement;
+const dieneGeometryControl = document.getElementById("dieneGeometryControl") as HTMLElement;
+const cisGeometryBtn = document.getElementById("cisGeometryBtn") as HTMLButtonElement;
+const transGeometryBtn = document.getElementById("transGeometryBtn") as HTMLButtonElement;
 const makeRepeatUnitBtn = document.getElementById("makeRepeatUnitBtn") as HTMLButtonElement;
 const mechanismHint = document.getElementById("mechanismHint")!;
 const polymerPanel = document.getElementById("polymerPanel") as HTMLElement;
@@ -68,6 +73,10 @@ const slotBBtn = document.getElementById("slotBBtn") as HTMLButtonElement;
 const builderPubchemInput = document.getElementById("builderPubchemInput") as HTMLInputElement;
 const builderPubchemLoadBtn = document.getElementById("builderPubchemLoadBtn") as HTMLButtonElement;
 const builderSketchBtn = document.getElementById("builderSketchBtn") as HTMLButtonElement;
+const editSmilesSourceBtn = document.getElementById("editSmilesSourceBtn") as HTMLButtonElement;
+const editPubchemSourceBtn = document.getElementById("editPubchemSourceBtn") as HTMLButtonElement;
+const builderSmilesSourceBtn = document.getElementById("builderSmilesSourceBtn") as HTMLButtonElement;
+const builderPubchemSourceBtn = document.getElementById("builderPubchemSourceBtn") as HTMLButtonElement;
 const anchorStepLabel = document.getElementById("anchorStepLabel")!;
 const builderStatus = document.getElementById("builderStatus") as HTMLElement;
 const repeatRange = document.getElementById("repeatRange") as HTMLInputElement;
@@ -119,12 +128,33 @@ let builder: {
   mechanism: PolymerMechanism;
   activeSlot: SlotName;
   slots: Record<SlotName, MonomerSlot | null>;
+  dieneGeometry: "cis" | "trans";
 } | null = null;
 // The molecule currently backing the anchor dropdowns (plus an optional atom-id
 // prefix restriction while the A+B pair preview is shown).
 let anchorTemplate: PolymerTemplate | null = null;
 let anchorPrefixFilter: string | null = null;
 let anchorsUsable = false;
+let selectedInputSource: LoadInputKind = "pubchem";
+
+function setInputSource(source: LoadInputKind) {
+  selectedInputSource = source;
+  const isSmiles = source === "smiles";
+  for (const button of [editSmilesSourceBtn, builderSmilesSourceBtn]) {
+    button.classList.toggle("is-active", isSmiles);
+    button.setAttribute("aria-pressed", String(isSmiles));
+  }
+  for (const button of [editPubchemSourceBtn, builderPubchemSourceBtn]) {
+    button.classList.toggle("is-active", !isSmiles);
+    button.setAttribute("aria-pressed", String(!isSmiles));
+  }
+  const placeholder = isSmiles ? "SMILES" : "Name or CID";
+  const label = isSmiles ? "SMILES" : "PubChem name or CID";
+  for (const input of [pubchemInput, builderPubchemInput]) {
+    input.placeholder = placeholder;
+    input.setAttribute("aria-label", label);
+  }
+}
 
 function currentMechanism(): PolymerMechanism {
   return builder?.mechanism ?? "addition";
@@ -137,7 +167,7 @@ const MODE_TITLES: Record<PolymerMechanism, string> = {
 
 const MECHANISM_HINTS: Record<PolymerMechanism, string> = {
   addition:
-    "Pick the two backbone atoms by their labels (e.g. the C=C carbons C1 and C2); the double bond opens and the unit tiles into a chain.",
+    "Pick the two chain-end atoms. A selected C=C opens directly; a conjugated diene can rearrange by 1,4-addition.",
   condensation:
     "Pick a -COOH or -COCl carbon as one anchor and the -OH oxygen (or -NH2 nitrogen) as the other; each new bond releases water or HCl.",
 };
@@ -153,7 +183,7 @@ function enterBuilderMode(mechanism: PolymerMechanism) {
     const ok = window.confirm(`Start a new ${MODE_TITLES[mechanism].toLowerCase()} polymer? The current chain will be cleared.`);
     if (!ok) return;
   }
-  builder = { mechanism, activeSlot: "A", slots: { A: null, B: null } };
+  builder = { mechanism, activeSlot: "A", slots: { A: null, B: null }, dieneGeometry: "cis" };
   setPolymerMode(false);
   clearMolecule();
   renderBuilderUi();
@@ -201,6 +231,15 @@ function renderBuilderUi() {
   slotBBtn.textContent = slotLabel("B");
   slotABtn.classList.toggle("is-active", builder.activeSlot === "A");
   slotBBtn.classList.toggle("is-active", builder.activeSlot === "B");
+  const selectedAddition =
+    builder.mechanism === "addition" && anchorTemplate && anchorsUsable
+      ? classifyAdditionAnchors(anchorTemplate, anchorASelect.value, anchorBSelect.value)
+      : null;
+  dieneGeometryControl.hidden = selectedAddition?.kind !== "diene-1,4";
+  cisGeometryBtn.classList.toggle("is-active", builder.dieneGeometry === "cis");
+  transGeometryBtn.classList.toggle("is-active", builder.dieneGeometry === "trans");
+  cisGeometryBtn.setAttribute("aria-pressed", String(builder.dieneGeometry === "cis"));
+  transGeometryBtn.setAttribute("aria-pressed", String(builder.dieneGeometry === "trans"));
   anchorStepLabel.textContent =
     builder.mechanism === "condensation" ? `2 · Pick monomer ${builder.activeSlot}'s two anchor atoms` : "2 · Pick the two anchor atoms";
   makeRepeatUnitBtn.textContent =
@@ -459,6 +498,7 @@ function populateAnchorControls(template: PolymerTemplate, options: { onlyPrefix
   }
 
   applyAnchorPreselect(template);
+  renderBuilderUi();
 }
 
 // Suggest sensible anchors for the active mechanism: the first double/triple
@@ -504,11 +544,14 @@ function applyAnchorPreselect(template: PolymerTemplate) {
     return;
   }
 
-  const multiBond = template.bonds.find(
-    (bond) => (bond.order === 2 || bond.order === 3) && heavy.some((a) => a.id === bond.a) && heavy.some((a) => a.id === bond.b),
-  );
-  anchorASelect.value = multiBond ? multiBond.a : heavy[0].id;
-  anchorBSelect.value = multiBond ? multiBond.b : heavy[1].id;
+  const heavyIds = new Set(heavy.map((atom) => atom.id));
+  const additionTemplate = {
+    atoms: heavy,
+    bonds: template.bonds.filter((bond) => heavyIds.has(bond.a) && heavyIds.has(bond.b)),
+  };
+  const suggested = suggestAdditionAnchors(additionTemplate);
+  anchorASelect.value = suggested?.[0] ?? heavy[0].id;
+  anchorBSelect.value = suggested?.[1] ?? heavy[1].id;
 }
 
 function anchorOption(atomId: string, label: string) {
@@ -523,6 +566,7 @@ function anchorOption(atomId: string, label: string) {
 function onStructureLoaded() {
   if (!builder || !importedTemplate) return;
   const raw = importedTemplate;
+  if (builder.mechanism === "addition") builder.dieneGeometry = "cis";
   builder.slots[builder.activeSlot] = { template: raw, display: currentTemplate };
   refreshBuilderView();
   const name = raw.name || raw.shortName || "molecule";
@@ -614,7 +658,10 @@ function makeRepeatUnit() {
         { template: B.template, anchorA: B.anchorA, anchorB: B.anchorB },
       );
     } else {
-      derived = deriveRepeatUnit(A.template, A.anchorA, A.anchorB, { mechanism: builder.mechanism });
+      derived = deriveRepeatUnit(A.template, A.anchorA, A.anchorB, {
+        mechanism: builder.mechanism,
+        dieneGeometry: builder.dieneGeometry,
+      });
     }
     activatePolymerTemplate(derived);
     showBuilderStatus(`${derived.name} - drag Repeats to grow the chain.`);
@@ -642,13 +689,12 @@ function activatePolymerTemplate(derived: PolymerTemplate) {
   rebuildGraph();
 }
 
-// Shared loader for both the Edit panel and polymer builder. Clear structural
-// syntax is treated as SMILES; ordinary names/CIDs retain the existing PubChem
-// path. `smiles:` and `pubchem:` resolve intentionally ambiguous short input.
+// Shared loader for both panels. Their synchronized icon buttons select the
+// source; `smiles:` and `pubchem:` prefixes remain authoritative overrides.
 async function loadFromInput(rawInput: string) {
   let input: ReturnType<typeof classifyLoadInput>;
   try {
-    input = classifyLoadInput(rawInput);
+    input = classifyLoadInput(rawInput, selectedInputSource);
   } catch (error) {
     showImportStatus(error instanceof Error ? error.message : String(error));
     return;
@@ -831,7 +877,38 @@ builderPubchemInput.addEventListener("keydown", (event) => {
   }
 });
 builderSketchBtn.addEventListener("click", () => sketchFileInput.click());
+editSmilesSourceBtn.addEventListener("click", () => setInputSource("smiles"));
+builderSmilesSourceBtn.addEventListener("click", () => setInputSource("smiles"));
+editPubchemSourceBtn.addEventListener("click", () => setInputSource("pubchem"));
+builderPubchemSourceBtn.addEventListener("click", () => setInputSource("pubchem"));
 makeRepeatUnitBtn.addEventListener("click", makeRepeatUnit);
+anchorASelect.addEventListener("change", () => {
+  saveActiveSlotAnchors();
+  renderBuilderUi();
+});
+anchorBSelect.addEventListener("change", () => {
+  saveActiveSlotAnchors();
+  renderBuilderUi();
+});
+function setDieneGeometry(geometry: "cis" | "trans") {
+  if (!builder) return;
+  if (builder.dieneGeometry === geometry) return;
+  saveActiveSlotAnchors();
+  const hadPolymer = isPolymerMode();
+  builder.dieneGeometry = geometry;
+  if (hadPolymer) {
+    // The visible chain was derived with the previous geometry. Return to the
+    // source monomer so the screen never contradicts the selected switch.
+    refreshBuilderView();
+  } else {
+    renderBuilderUi();
+  }
+  showBuilderStatus(
+    `${geometry === "cis" ? "Cis" : "Trans"} 1,4 geometry selected.${hadPolymer ? " Make the repeat unit again." : ""}`,
+  );
+}
+cisGeometryBtn.addEventListener("click", () => setDieneGeometry("cis"));
+transGeometryBtn.addEventListener("click", () => setDieneGeometry("trans"));
 modeAdditionBtn.addEventListener("click", () => enterBuilderMode("addition"));
 modeCondensationBtn.addEventListener("click", () => enterBuilderMode("condensation"));
 builderResetBtn.addEventListener("click", exitBuilder);
@@ -884,16 +961,28 @@ resetViewBtn.addEventListener("click", () => {
   if (three) resetView(three);
 });
 clearBtn.addEventListener("click", clearMolecule);
-function togglePanel(panel: HTMLElement, button: HTMLButtonElement) {
-  const open = panel.hidden; // about to open
+function setPanelOpen(panel: HTMLElement, button: HTMLButtonElement, open: boolean) {
   panel.hidden = !open;
   button.classList.toggle("is-active", open);
   button.setAttribute("aria-pressed", String(open));
 }
+function togglePanel(panel: HTMLElement, button: HTMLButtonElement) {
+  setPanelOpen(panel, button, panel.hidden);
+}
+function toggleExclusivePanel(
+  panel: HTMLElement,
+  button: HTMLButtonElement,
+  otherPanel: HTMLElement,
+  otherButton: HTMLButtonElement,
+) {
+  const open = panel.hidden;
+  if (open) setPanelOpen(otherPanel, otherButton, false);
+  setPanelOpen(panel, button, open);
+}
 statusToggleBtn.addEventListener("click", () => togglePanel(statusPanel, statusToggleBtn));
-editToggleBtn.addEventListener("click", () => togglePanel(editPanel, editToggleBtn));
+editToggleBtn.addEventListener("click", () => toggleExclusivePanel(editPanel, editToggleBtn, polymerPanel, polymerToggleBtn));
 polymerToggleBtn.addEventListener("click", () => {
-  togglePanel(polymerPanel, polymerToggleBtn);
+  toggleExclusivePanel(polymerPanel, polymerToggleBtn, editPanel, editToggleBtn);
   // Anchor picking needs the C1/O2/... labels, so opening the builder turns
   // them on. They stay on after closing; the Edit toggle turns them back off.
   if (!polymerPanel.hidden && !labelsToggle.checked) {

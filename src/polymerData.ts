@@ -4,6 +4,15 @@ export type BondOrder = 1 | 2 | 3 | "aromatic";
 /** How monomers join: addition opens a multiple bond; condensation expels a
  *  small byproduct molecule (water or HCl) each time a link bond forms. */
 export type PolymerMechanism = "addition" | "condensation";
+export type DieneGeometry = "cis" | "trans";
+
+export interface Diene14Addition {
+  kind: "diene-1,4";
+  geometry: DieneGeometry;
+  centralBondId: string;
+  leftInnerAtomId: string;
+  rightInnerAtomId: string;
+}
 
 /** H2O from a -COOH acid; HCl from a -COCl acyl chloride. */
 export type ByproductFormula = "H2O" | "HCl";
@@ -78,6 +87,8 @@ export interface PolymerTemplate {
     /** Chain-end caps; default "H". "OH" restores a condensation acid end. */
     leftCap?: ChainCapKind;
     rightCap?: ChainCapKind;
+    /** Product geometry for a conjugated-diene 1,4-addition repeat unit. */
+    addition?: Diene14Addition;
   };
   /** Template bonds that already released a byproduct when the unit was built
    *  (the internal A-B bond of a merged two-monomer condensation unit). */

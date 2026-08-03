@@ -1,4 +1,5 @@
 import type { BondOrder, PolymerTemplate, TemplateAtom, TemplateBond } from "./polymerData";
+import { enforceDiene14Geometry } from "./dieneGeometry";
 
 export interface GeometryCleanupOptions {
   mode: "molecule" | "polymer";
@@ -12,6 +13,7 @@ interface Neighbor {
 }
 
 const DEFAULT_SINGLE_BOND = 1.45;
+const REPEAT_LINK_BOND = 1.53;
 const MAX_BROWSER_VSEPR_ATOMS = 32;
 const TETRAHEDRAL_ANGLE = (109.5 * Math.PI) / 180;
 const TRIGONAL_ANGLE = (120 * Math.PI) / 180;
@@ -23,11 +25,39 @@ export function cleanupTemplateGeometry(template: PolymerTemplate, options: Geom
   const atomById = atomMap(template);
 
   if (options.mode === "polymer") {
+    if (template.connection.addition?.kind === "diene-1,4") return cleanupDieneRepeatUnit(template);
     return cleanupDirectRepeatUnit(template, atomById, adjacency) ?? template;
   }
 
   if (hasCycle(template, adjacency)) return template;
   return layoutAcyclicMolecule(template, atomById, adjacency) ?? template;
+}
+
+function cleanupDieneRepeatUnit(template: PolymerTemplate): PolymerTemplate {
+  const original = template.atoms.map((atom) => atom.position);
+  const { positions } = enforceDiene14Geometry(template, original);
+  const leftIndex = template.atoms.findIndex((atom) => atom.id === template.connection.leftAtomId);
+  const rightIndex = template.atoms.findIndex((atom) => atom.id === template.connection.rightAtomId);
+  if (leftIndex < 0 || rightIndex < 0) return template;
+
+  const origin = positions[leftIndex];
+  const axisVector = subVec(positions[rightIndex], origin);
+  const axisLength = Math.hypot(...axisVector);
+  if (axisLength < 0.1) return template;
+  const u1 = normalizeVec(axisVector);
+  const helper: Vec3 = Math.abs(u1[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1];
+  const u2 = normalizeVec(crossVec(helper, u1));
+  const u3 = crossVec(u1, u2);
+  const aligned = positions.map((position): Vec3 => {
+    const relative = subVec(position, origin);
+    return [dotVec(relative, u1), dotVec(relative, u2), dotVec(relative, u3)];
+  });
+
+  return {
+    ...template,
+    atoms: template.atoms.map((atom, index) => ({ ...atom, position: roundVec(aligned[index]) })),
+    step: [round(axisLength + REPEAT_LINK_BOND), 0, 0],
+  };
 }
 
 function cleanupDirectRepeatUnit(
@@ -412,6 +442,10 @@ function dotVec(a: Vec3, b: Vec3) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+function crossVec(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
 function normalizeVec(a: Vec3): Vec3 {
   const length = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / length, a[1] / length, a[2] / length];
@@ -434,4 +468,3 @@ function roundVec(value: Vec3): Vec3 {
 function round(value: number) {
   return Number(value.toFixed(4));
 }
-
