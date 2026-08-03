@@ -680,6 +680,24 @@ function parseSmiles(source: string): ParsedStructure {
   let pendingOrder: BondOrder | undefined;
   let index = 0;
 
+  function closeRingMarker(key: string) {
+    const existing = rings.get(key);
+    if (existing) {
+      const start = atoms.find((atom) => atom.id === existing.atomId);
+      const end = atoms.find((atom) => atom.id === currentAtomId);
+      bonds.push({
+        id: `b${bonds.length + 1}`,
+        a: existing.atomId,
+        b: currentAtomId!,
+        order: pendingOrder ?? existing.order ?? inferDefaultBond(start, end),
+      });
+      rings.delete(key);
+    } else {
+      rings.set(key, { atomId: currentAtomId!, order: pendingOrder });
+    }
+    pendingOrder = undefined;
+  }
+
   while (index < source.length) {
     const char = source[index];
 
@@ -726,29 +744,25 @@ function parseSmiles(source: string): ParsedStructure {
     }
     if (/\d/.test(char)) {
       if (!currentAtomId) throw new Error("SMILES ring marker appeared before an atom.");
-      const existing = rings.get(char);
-      if (existing) {
-        const start = atoms.find((atom) => atom.id === existing.atomId);
-        const end = atoms.find((atom) => atom.id === currentAtomId);
-        bonds.push({
-          id: `b${bonds.length + 1}`,
-          a: existing.atomId,
-          b: currentAtomId,
-          order: pendingOrder ?? existing.order ?? inferDefaultBond(start, end),
-        });
-        rings.delete(char);
-      } else {
-        rings.set(char, { atomId: currentAtomId, order: pendingOrder });
-      }
-      pendingOrder = undefined;
+      closeRingMarker(char);
       index += 1;
+      continue;
+    }
+    if (char === "%") {
+      const digits = source.slice(index + 1, index + 3);
+      if (!/^\d{2}$/.test(digits)) {
+        throw new Error(`SMILES ring marker "%" at position ${index + 1} must be followed by two digits.`);
+      }
+      if (!currentAtomId) throw new Error("SMILES ring marker appeared before an atom.");
+      closeRingMarker(digits);
+      index += 3;
       continue;
     }
 
     const parsedAtom = readSmilesAtom(source, index);
     if (!parsedAtom) {
       throw new Error(
-        `Unsupported SMILES token "${char}" at position ${index + 1}. Supported atoms: ${SUPPORTED_ATOM_LIST}; bonds: - = # :; branches ( ); ring closures 0-9.`,
+        `Unsupported SMILES token "${char}" at position ${index + 1}. Supported atoms: ${SUPPORTED_ATOM_LIST}; bonds: - = # :; branches ( ); ring closures 0-9 or %10-%99.`,
       );
     }
 
