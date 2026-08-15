@@ -196,6 +196,13 @@ function enterBuilderMode(mechanism: PolymerMechanism) {
 
 function exitBuilder() {
   if (isPolymerMode() && currentGraph && !window.confirm("Start over? The current chain will be cleared.")) return;
+  resetBuilderAndScene();
+}
+
+// Shared by "Start over" and by switching between the Edit and Polymer
+// builder panels — either way, the previous panel's molecule/chain should
+// not linger into the other one.
+function resetBuilderAndScene() {
   builder = null;
   setPolymerMode(false);
   clearMolecule();
@@ -980,8 +987,16 @@ function toggleExclusivePanel(
   setPanelOpen(panel, button, open);
 }
 statusToggleBtn.addEventListener("click", () => togglePanel(statusPanel, statusToggleBtn));
-editToggleBtn.addEventListener("click", () => toggleExclusivePanel(editPanel, editToggleBtn, polymerPanel, polymerToggleBtn));
+editToggleBtn.addEventListener("click", () => {
+  // Switching in from the Polymer builder (not just re-opening Edit) leaves a
+  // built chain on screen otherwise, so start the scene fresh.
+  if (editPanel.hidden && !polymerPanel.hidden) resetBuilderAndScene();
+  toggleExclusivePanel(editPanel, editToggleBtn, polymerPanel, polymerToggleBtn);
+});
 polymerToggleBtn.addEventListener("click", () => {
+  // Likewise switching in from the Edit panel: don't carry its molecule into
+  // the builder.
+  if (polymerPanel.hidden && !editPanel.hidden) resetBuilderAndScene();
   toggleExclusivePanel(polymerPanel, polymerToggleBtn, editPanel, editToggleBtn);
   // Anchor picking needs the C1/O2/... labels, so opening the builder turns
   // them on. They stay on after closing; the Edit toggle turns them back off.
