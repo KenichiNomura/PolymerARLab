@@ -472,7 +472,7 @@ export function buildUFFInput(elements: AtomSymbol[], name: string, counts: Lamm
     "",
     "# FIRE energy minimization",
     "min_style       fire",
-    "minimize        1.0e-6 1.0e-8 10000 100000",
+    "minimize        1.0e-3 1.0e-5 1000 10000",
     "",
     "# NVT at 300 K for 10 ps (0.5 fs timestep x 20000 steps)",
     "fix             nvt all nvt temp 300.0 300.0 100.0",
