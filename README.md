@@ -71,7 +71,7 @@
 3. Press **Make repeat unit** — the chain forms and little **water molecules float away from every new bond**. The Status panel counts them (`releases n−1 H2O`).
 4. For polymers made from **two different monomers**: load the first (try `ethylene glycol`) into slot **A** and pick its two −OH oxygens. Tap slot **B** and load the second (`terephthalic acid`) — **both molecules appear on screen**, labelled **A** and **B**. Pick B's two −COOH carbons and press **Make repeat unit (combine A + B)** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
 5. Press the **Save LAMMPS (UFF)** download icon in the bottom-left dock. It downloads two files: `<name>.data` (the molecule) and `in.relax` (the instructions).
-6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the whole movie of it moving as one trajectory (`.xyz`) and the final shape (`.relaxed.data`).
+6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the whole movie of it moving as one extended-XYZ trajectory (`.xyz`) and the final shape (`.relaxed.data`).
 
 > 💡 Keep **Show hydrogens** turned on before you save, so the file has every atom.
 
