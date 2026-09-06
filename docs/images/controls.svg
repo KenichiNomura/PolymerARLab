@@ -47,21 +47,39 @@
   <text x="50" y="306" fill="#64748b" font-size="11" text-anchor="middle">main controls</text>
 
   <!-- Status -->
-  <rect x="190" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
-  <svg x="190" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6">
+  <rect x="360" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
+  <svg x="360" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6">
     <circle cx="12" cy="12" r="8.2"/>
     <circle cx="12" cy="8.1" r="1.05" fill="#e6fffb" stroke="none"/>
     <path d="M12 11.2v5.2" stroke-linecap="round"/>
   </g></svg>
-  <text x="220" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Status</text>
-  <text x="220" y="306" fill="#64748b" font-size="11" text-anchor="middle">atoms &amp; bonds info</text>
+  <text x="390" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Status</text>
+  <text x="390" y="306" fill="#64748b" font-size="11" text-anchor="middle">atoms &amp; bonds info</text>
 
   <!-- Tutorial -->
-  <rect x="360" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
-  <svg x="360" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6" stroke-linejoin="round">
+  <rect x="530" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
+  <svg x="530" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6" stroke-linejoin="round">
     <path d="M12 6.5C10.3 5.3 7.9 5 6 5.2v11.2c1.9-.2 4.3.1 6 1.3 1.7-1.2 4.1-1.5 6-1.3V5.2c-1.9-.2-4.3.1-6 1.3Z"/>
     <path d="M12 6.5v11.5"/>
   </g></svg>
-  <text x="390" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Tutorial</text>
-  <text x="390" y="306" fill="#64748b" font-size="11" text-anchor="middle">this guide</text>
+  <text x="560" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Tutorial</text>
+  <text x="560" y="306" fill="#64748b" font-size="11" text-anchor="middle">this guide</text>
+
+  <!-- Polymer -->
+  <rect x="190" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
+  <svg x="190" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6">
+    <rect x="2.5" y="11.5" width="12" height="8" rx="4" transform="rotate(-45 8.5 15.5)"/>
+    <rect x="9.5" y="4.5" width="12" height="8" rx="4" transform="rotate(-45 15.5 8.5)"/>
+  </g></svg>
+  <text x="220" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Polymer</text>
+  <text x="220" y="306" fill="#64748b" font-size="11" text-anchor="middle">build a chain</text>
+
+  <!-- Save -->
+  <rect x="700" y="212" width="60" height="60" rx="13" fill="#12211f" stroke="#2a3b38"/>
+  <svg x="700" y="212" width="60" height="60" viewBox="-3 -3 30 30"><g fill="none" stroke="#e6fffb" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4.5v9.4m0 0 3.4-3.4M12 13.9 8.6 10.5"/>
+    <path d="M5 15.5v2.4A1.6 1.6 0 0 0 6.6 19.5h10.8a1.6 1.6 0 0 0 1.6-1.6v-2.4"/>
+  </g></svg>
+  <text x="730" y="290" fill="#334155" font-size="13" font-weight="700" text-anchor="middle">Save</text>
+  <text x="730" y="306" fill="#64748b" font-size="11" text-anchor="middle">LAMMPS files</text>
 </svg>

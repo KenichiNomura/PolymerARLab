@@ -2,6 +2,8 @@
 
 **Draw a molecule on paper, and watch it pop into 3-D — even in augmented reality on your desk.** You can also look up real molecules, snap them together into long polymer chains, and save a file that lets scientists' software "relax" the shape. It all runs in your web browser on a **phone or a computer** — nothing to download.
 
+> **For education only:** Polymer AR Lab is a teaching demonstration. Molecular recognition, generated structures, UFF-style parameters, and simulation schedules are approximate. The app is not validated for production engineering, safety decisions, or research conclusions.
+
 ### ▶️ Open it here
 
 - **App:** https://kenichinomura.github.io/PolymerARLab/
@@ -23,13 +25,13 @@
 
 ## The buttons
 
-<img src="docs/images/controls.svg" alt="Guide to the on-screen buttons: Camera, Reset view, Clear, AR View at the top-left; Edit, Status, Tutorial at the bottom-left" width="100%">
+<img src="docs/images/controls.svg" alt="Guide to the on-screen buttons: Camera, Reset view, Clear, AR View at the top-left; Edit, Polymer, Status, Tutorial, and Save at the bottom-left" width="100%">
 
 - **Camera** — turns on the camera to scan a drawing. Once it's on, **tap the frame on the screen to take the picture** (drag the frame's edges to make it bigger or smaller, drag the middle to move it).
 - **Reset view** — recenters the molecule if it drifts off screen.
 - **Clear** — removes the molecule so you can start over.
 - **AR View** — (on iPhone/iPad) places the molecule in the real world.
-- **Edit** ✏️ — opens the molecule panel (scan a sketch, look up molecules, toggle labels).
+- **Edit** ✏️ — opens the molecule panel (load PubChem/SMILES, upload a sketch, toggle labels).
 - **Polymer** 🔗 — opens the polymer builder (choose a curing mechanism, load monomers, grow a chain).
 - **Status** ⓘ — shows how many atoms and bonds the molecule has.
 - **Tutorial** 📖 — opens the picture guide.
@@ -57,21 +59,23 @@
 
 ## Guide 2 — Build a polymer and save it for LAMMPS
 
-<img src="docs/images/monomer-to-polymer.svg" alt="Start from a monomer, pick its two backbone atoms, the double bond opens, and the unit repeats into a chain" width="100%">
+<img src="docs/images/monomer-to-polymer.svg" alt="Isoprene undergoes 1,4-addition, leaving a double bond that can be configured as cis or trans before repeating into a chain" width="100%">
 
-1. **Open the polymer builder.** Tap the **Polymer** 🔗 icon in the bottom-left dock and choose how your polymer cures: **Addition cure** (opens a C=C double bond) or **Condensation cure** (each new bond releases one small molecule — H₂O, or HCl from acyl chlorides). The screen clears so you start fresh.
-2. **Load a monomer.** Type a PubChem name/CID or a SMILES string — try `ethylene`, `styrene`, or `smiles:C=C` for addition — and press **Load**. Atom labels turn on automatically so every atom shows its name (C1, C2, …). Prefix ambiguous short strings with `smiles:` or `pubchem:`.
-3. **Pick the two anchor atoms** — where the chain will connect (for a vinyl monomer, the two carbons of the double bond) — and press **Make repeat unit**. The molecule copies itself into a chain.
-4. Drag the **Repeats** slider to make the chain longer or shorter.
+1. **Open the polymer builder.** Tap the **Polymer** 🔗 icon and choose **Addition cure** or **Condensation cure**. Edit and Polymer cannot be open together; changing panels clears the previous working scene.
+2. **Choose the input source.** Tap the database icon for a PubChem name/CID or the smile icon for SMILES, enter the molecule, and press **Load**. PubChem is selected by default. SMILES is case-sensitive: uppercase `C` is aliphatic carbon and lowercase `c` is aromatic carbon.
+3. **Try isoprene 1,4-addition.** In SMILES mode, load `C=C(C=C)C` (an ordering that keeps the diene backbone labelled C1–C4), select terminal atoms C1 and C4, and choose **Cis** or **Trans**. The two original double bonds become single bonds and a new C2=C3 double bond remains: `C1=C2–C3=C4` → `–C1–C2=C3–C4–`.
+4. Press **Make repeat unit**, then drag the **Repeats** slider. If you change Cis/Trans after building, the app returns to the monomer; press **Make repeat unit** again to build the newly selected geometry.
 
-**Condensation polymers (they release water!):** some real polymers — polyesters like PET, nylons, proteins — form by *condensation*: every new bond squeezes out a small molecule — H₂O from acids (−COOH), or HCl from acyl chlorides (−COCl, e.g. `adipoyl chloride` + `hexamethylenediamine`, the classic "nylon rope trick"). To try it:
+**Cis and trans polyisoprene:** cis-1,4-polyisoprene models natural rubber, while trans-1,4-polyisoprene models gutta-percha. The cis chain generally crystallizes less readily when unstretched; the trans chain packs and crystallizes more readily. Natural rubber can still crystallize under strain or suitable low-temperature conditions, so it is not correct to say that cis-polyisoprene never crystallizes.
+
+**Condensation polymers:** the app uses a simplified teaching model in which forming a new bond releases H₂O from a carboxylic acid or HCl from an acyl chloride. To try it:
 
 1. In the polymer builder, choose **Condensation cure** and load a monomer with the right ends, e.g. `lactic acid`.
 2. The app suggests the −COOH carbon and the −OH oxygen as anchors (you can re-pick them; a wrong pick shows an error explaining what can react).
-3. Press **Make repeat unit** — the chain forms and little **water molecules float away from every new bond**. The Status panel counts them (`releases n−1 H2O`).
-4. For polymers made from **two different monomers**: load the first (try `ethylene glycol`) into slot **A** and pick its two −OH oxygens. Tap slot **B** and load the second (`terephthalic acid`) — **both molecules appear on screen**, labelled **A** and **B**. Pick B's two −COOH carbons and press **Make repeat unit (combine A + B)** — that's **PET**, the plastic in drink bottles. (`hexamethylenediamine` + `adipic acid` makes **nylon 6,6**.)
+3. Press **Make repeat unit** — the chain forms and little byproduct molecules float away. They are a teaching visual and are excluded from AR and LAMMPS exports.
+4. For **PET**, load `ethylene glycol` into slot **A** and pick its two alcohol oxygens. Load `terephthalic acid` into slot **B** and pick its two carboxyl carbons. The new ester bonds form between those oxygens and carbons. In the simplified net reaction, the alcohol oxygen remains in the ester linkage; the acid −OH and alcohol H form water. Industrial PET production is more involved: initial direct esterification forms water, while later melt polycondensation commonly removes ethylene glycol.
 5. Press the **Save LAMMPS (UFF)** download icon in the bottom-left dock. It downloads two files: `<name>.data` (the molecule) and `in.relax` (the instructions).
-6. If you use the science program **LAMMPS**, run `lmp -in in.relax`. It gently tidies the shape and saves the whole movie of it moving as one XYZ trajectory (`.xyz`) and the final shape (`.relaxed.data`).
+6. If you use **LAMMPS**, run `lmp -in in.relax`. It performs overlap relief, FIRE minimization, and 10 ps of NVT at 300 K, then saves one XYZ trajectory (`.xyz`) and the final shape (`.relaxed.data`). This short, finite-chain vacuum run demonstrates geometry relaxation; it cannot establish bulk crystallinity or research-quality material properties.
 
 > 💡 Keep **Show hydrogens** turned on before you save, so the file has every atom.
 

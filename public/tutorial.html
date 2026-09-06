@@ -129,18 +129,19 @@
         <span class="badge">Tutorial</span>
         <h1>Polymer AR Lab</h1>
         <p class="lede">
-          Turn a hand-drawn Lewis structure — or any molecule from PubChem — into an interactive 3-D model,
+          Turn a hand-drawn Lewis structure — or a molecule loaded from PubChem or SMILES — into an interactive 3-D model,
           view it in augmented reality on the desk in front of you, build polymer chains, and export ready-to-run
-          LAMMPS input for a quick relaxation.
+          LAMMPS input for a quick educational relaxation.
         </p>
         <p class="muted" style="margin-bottom:0">
           🖥️ <b>Desktop</b> and 📱 <b>mobile</b> both work. On a phone you scan with the live camera; on a
           computer you upload a photo. Everything runs in your browser — nothing to install.
         </p>
+        <div class="callout"><b>For education only.</b> Polymer AR Lab is a teaching demonstration. Molecular recognition, generated polymer structures, UFF-style parameters, and simulation schedules are approximate and are not validated for production engineering, safety decisions, or research conclusions.</div>
         <nav class="toc">
           <a href="#tour"><span class="chip">Interface tour</span></a>
           <a href="#scan"><span class="chip">① Scan a sketch → AR</span></a>
-          <a href="#polymer"><span class="chip">② PubChem → polymer → LAMMPS</span></a>
+          <a href="#polymer"><span class="chip">② Monomer → polymer → LAMMPS</span></a>
           <a href="#tips"><span class="chip">Tips</span></a>
         </nav>
       </header>
@@ -171,7 +172,7 @@
           <text x="380" y="230" fill="var(--muted)" font-size="12" text-anchor="middle">3-D model (drag to orbit, scroll/pinch to zoom)</text>
           <!-- bottom-left dock -->
           <rect x="16" y="244" width="92" height="40" rx="8" fill="var(--icon-bg)"/>
-          <text x="20" y="236" fill="var(--muted)" font-size="12">Bottom-left: Edit / Status panels</text>
+          <text x="20" y="236" fill="var(--muted)" font-size="12">Bottom-left: panels and Save</text>
         </svg>
         <figcaption>Where the controls live on screen.</figcaption>
       </figure>
@@ -200,7 +201,7 @@
       <div class="card legend">
         <div class="legend-row">
           <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3l3 3M4.5 16.2 15 5.7a1.6 1.6 0 0 1 2.3 0l1 1a1.6 1.6 0 0 1 0 2.3L7.8 19.5l-4 1 1-4Z" class="diagram-ink" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
-          <div><b>Edit</b><span class="what">Open/close the molecule panel: upload a sketch, load from PubChem, toggle labels/hydrogens.</span></div>
+          <div><b>Edit</b><span class="what">Open/close the molecule panel: load from PubChem or SMILES, upload a sketch, and toggle labels/hydrogens. Opening Polymer closes Edit, and vice versa.</span></div>
         </div>
         <div class="legend-row">
           <span class="icon-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="11.5" width="12" height="8" rx="4" transform="rotate(-45 8.5 15.5)" class="diagram-ink" stroke-width="1.6"/><rect x="9.5" y="4.5" width="12" height="8" rx="4" transform="rotate(-45 15.5 8.5)" class="diagram-ink" stroke-width="1.6"/></svg></span>
@@ -223,15 +224,19 @@
       <h3>Inside the Edit panel</h3>
       <div class="grid2">
         <figure>
-          <svg viewBox="0 0 300 160" role="img" aria-label="Edit panel mockup">
+          <svg viewBox="0 0 300 160" role="img" aria-label="Edit panel mockup with Load, Upload sketch, SMILES, and PubChem controls">
             <rect x="1" y="1" width="298" height="158" rx="12" class="diagram-ink" stroke-width="1.5" opacity="0.6"/>
-            <rect x="16" y="16" width="268" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
-            <text x="150" y="36" text-anchor="middle" font-size="13" fill="currentColor">Upload sketch</text>
+            <rect x="16" y="16" width="196" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="26" y="36" font-size="12" fill="var(--muted)">Name or CID</text>
+            <rect x="220" y="16" width="64" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="252" y="36" text-anchor="middle" font-size="13" fill="currentColor">Load</text>
 
-            <rect x="16" y="56" width="196" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
-            <text x="26" y="76" font-size="12" fill="var(--muted)">PubChem name or CID</text>
-            <rect x="220" y="56" width="64" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
-            <text x="252" y="76" text-anchor="middle" font-size="13" fill="currentColor">Load</text>
+            <rect x="16" y="56" width="150" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="91" y="76" text-anchor="middle" font-size="12" fill="currentColor">Upload sketch</text>
+            <rect x="174" y="56" width="50" height="30" rx="7" class="diagram-ink" stroke-width="1.3"/>
+            <text x="199" y="76" text-anchor="middle" font-size="11" fill="currentColor">☺</text>
+            <rect x="232" y="56" width="52" height="30" rx="7" fill="var(--chip)" stroke="var(--accent)" stroke-width="1.5"/>
+            <text x="258" y="76" text-anchor="middle" font-size="11" fill="var(--accent)">DB</text>
 
             <rect x="16" y="100" width="16" height="16" rx="3" class="diagram-ink" stroke-width="1.3"/>
             <text x="40" y="113" font-size="12.5" fill="currentColor">Atom labels</text>
@@ -243,8 +248,9 @@
         </figure>
         <div class="card" style="margin-top:0">
           <h3 style="margin-top:0">What each control does</h3>
+          <p><b>Load</b> — choose a source icon, enter the molecule, then press <b>Load</b>. The database icon selects PubChem names/CIDs; the smile icon selects SMILES. PubChem is selected initially.</p>
+          <p><b>SMILES is case-sensitive</b> — uppercase <code>C</code> is aliphatic carbon, while lowercase <code>c</code> is aromatic carbon. For example, <code>C=C(C=C)C</code> is isoprene; lowercase <code>c</code> would describe aromatic atoms.</p>
           <p><b>Upload sketch</b> — pick a photo of a Lewis structure (best on desktop).</p>
-          <p><b>PubChem</b> — type a name (e.g. <code>caffeine</code>) or a CID (e.g. <code>2244</code>) and press <b>Load</b> to fetch the real 3-D structure.</p>
           <p><b>Atom labels</b> — show each atom's element + index (C1, C2, O1…). You use these labels to pick polymer anchors.</p>
           <p><b>Show hydrogens</b> — display/hide H atoms (on by default; keep it on before saving LAMMPS files).</p>
           <p><b>Building polymers</b> lives in its own panel now — tap the chain icon in the dock (Walkthrough ②).</p>
@@ -254,42 +260,49 @@
       <h3>Inside the Polymer panel</h3>
       <div class="grid2">
         <figure>
-          <svg viewBox="0 0 300 330" role="img" aria-label="Polymer panel mockup">
-            <rect x="1" y="1" width="298" height="328" rx="12" class="diagram-ink" stroke-width="1.5" opacity="0.6"/>
-            <text x="16" y="30" font-size="11.5" font-weight="700" fill="var(--accent-2)">CONDENSATION CURE</text>
+          <svg viewBox="0 0 300 350" role="img" aria-label="Addition polymer panel mockup with isoprene and cis/trans geometry controls">
+            <rect x="1" y="1" width="298" height="348" rx="12" class="diagram-ink" stroke-width="1.5" opacity="0.6"/>
+            <text x="16" y="30" font-size="11.5" font-weight="700" fill="var(--accent-2)">ADDITION CURE</text>
             <rect x="196" y="14" width="88" height="24" rx="6" class="diagram-ink" stroke-width="1.2"/>
             <text x="240" y="30" text-anchor="middle" font-size="11" fill="currentColor">✕ Start over</text>
 
             <text x="16" y="60" font-size="11" font-weight="700" fill="var(--muted)">1 · LOAD MONOMER(S)</text>
-            <rect x="16" y="68" width="130" height="28" rx="6" stroke="var(--accent)" fill="none" stroke-width="1.6"/>
-            <text x="81" y="86" text-anchor="middle" font-size="11.5" fill="var(--accent)">A: ethylene glycol</text>
-            <rect x="154" y="68" width="130" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="219" y="86" text-anchor="middle" font-size="11.5" fill="var(--muted)">B: empty</text>
-            <rect x="16" y="104" width="196" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="26" y="122" font-size="11.5" fill="var(--muted)">PubChem name or CID</text>
-            <rect x="220" y="104" width="64" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="252" y="122" text-anchor="middle" font-size="12" fill="currentColor">Load</text>
-            <rect x="16" y="140" width="268" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="150" y="158" text-anchor="middle" font-size="12" fill="currentColor">Upload sketch</text>
+            <rect x="16" y="68" width="196" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="26" y="86" font-size="11.5" fill="var(--muted)">C=C(C=C)C</text>
+            <rect x="220" y="68" width="64" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="252" y="86" text-anchor="middle" font-size="12" fill="currentColor">Load</text>
+            <rect x="16" y="104" width="150" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="91" y="122" text-anchor="middle" font-size="11.5" fill="currentColor">Upload sketch</text>
+            <rect x="174" y="104" width="50" height="28" rx="6" fill="var(--chip)" stroke="var(--accent)" stroke-width="1.5"/>
+            <text x="199" y="122" text-anchor="middle" font-size="11" fill="var(--accent)">☺</text>
+            <rect x="232" y="104" width="52" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="258" y="122" text-anchor="middle" font-size="11" fill="currentColor">DB</text>
 
-            <text x="16" y="192" font-size="11" font-weight="700" fill="var(--muted)">2 · PICK THE TWO ANCHOR ATOMS</text>
-            <rect x="16" y="200" width="130" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="24" y="217" font-size="11.5" fill="var(--muted)">Anchor 1 ▾</text>
-            <rect x="154" y="200" width="130" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
-            <text x="162" y="217" font-size="11.5" fill="var(--muted)">Anchor 2 ▾</text>
+            <text x="16" y="158" font-size="11" font-weight="700" fill="var(--muted)">2 · PICK THE TWO ANCHOR ATOMS</text>
+            <rect x="16" y="166" width="130" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="24" y="183" font-size="11.5" fill="currentColor">C1 ▾</text>
+            <rect x="154" y="166" width="130" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="162" y="183" font-size="11.5" fill="currentColor">C4 ▾</text>
+
+            <text x="16" y="216" font-size="11.5" fill="currentColor">1,4 geometry</text>
+            <rect x="154" y="198" width="62" height="26" rx="6" fill="var(--chip)" stroke="var(--accent)" stroke-width="1.5"/>
+            <text x="185" y="215" text-anchor="middle" font-size="11.5" fill="var(--accent)">Cis</text>
+            <rect x="222" y="198" width="62" height="26" rx="6" class="diagram-ink" stroke-width="1.2"/>
+            <text x="253" y="215" text-anchor="middle" font-size="11.5" fill="currentColor">Trans</text>
 
             <text x="16" y="252" font-size="11" font-weight="700" fill="var(--muted)">3 · BUILD THE CHAIN</text>
             <rect x="16" y="260" width="268" height="28" rx="6" class="diagram-ink" stroke-width="1.2"/>
             <text x="150" y="278" text-anchor="middle" font-size="12" fill="currentColor">Make repeat unit</text>
-            <text x="16" y="310" font-size="11" fill="var(--muted)">Repeats</text>
-            <line x1="74" y1="306" x2="262" y2="306" class="diagram-ink" stroke-width="2"/>
-            <circle cx="150" cy="306" r="6" fill="var(--accent-2)"/>
+            <text x="16" y="322" font-size="11" fill="var(--muted)">Repeats</text>
+            <line x1="74" y1="318" x2="262" y2="318" class="diagram-ink" stroke-width="2"/>
+            <circle cx="150" cy="318" r="6" fill="var(--accent-2)"/>
           </svg>
           <figcaption>The Polymer panel (tap the chain icon), after choosing a mechanism.</figcaption>
         </figure>
         <div class="card" style="margin-top:0">
           <h3 style="margin-top:0">How the builder works</h3>
-          <p><b>Choose the mechanism first</b> — the panel opens with two big buttons: <b>Addition cure</b> (opens a C=C) or <b>Condensation cure</b> (each bond releases a small molecule — H₂O, or HCl from acyl chlorides). Choosing one starts from a clean scene.</p>
+          <p><b>Choose the mechanism first</b> — <b>Addition cure</b> opens a C=C/C≡C directly or performs 1,4-addition on a conjugated diene. <b>Condensation cure</b> removes a small molecule such as H₂O or HCl. Choosing one starts from a clean scene.</p>
+          <p><b>Cis / Trans</b> appears after the terminal atoms of an acyclic carbon 1,3-diene are selected. Changing the geometry after building resets to the monomer; press <b>Make repeat unit</b> again.</p>
           <p><b>A / B slots</b> — condensation polymers can use one self-condensing monomer (slot A only) or two different monomers. Tap a slot, then load a molecule into it; with both filled, they appear together labelled <b>A</b> and <b>B</b>.</p>
           <p><b>Anchors follow the highlighted slot</b> — the dropdowns always pick atoms of the active slot's monomer. Wrong picks show an error explaining what can react.</p>
           <p><b>✕ Start over</b> — back to the mechanism chooser (asks first if a chain is showing).</p>
@@ -358,66 +371,73 @@
       <hr />
 
       <!-- ============================ WALKTHROUGH B ============================ -->
-      <h2 id="polymer">② Download a monomer, build a polymer, export LAMMPS</h2>
-      <p>Fetch a monomer from PubChem, tell the app which two atoms form the backbone, tile it into a chain, and download a ready-to-run LAMMPS relaxation.</p>
+      <h2 id="polymer">② Load a monomer, build a polymer, export LAMMPS</h2>
+      <p>Load a monomer from PubChem or SMILES, tell the app which atoms form the backbone, choose its geometry when available, and export a short educational LAMMPS relaxation.</p>
 
       <figure class="scroll">
-        <svg viewBox="0 0 760 210" role="img" aria-label="Monomer to polymer diagram">
-          <text x="20" y="30" font-size="13" font-weight="700" fill="currentColor">Monomer (e.g. ethylene)</text>
-          <!-- C=C with double bond -->
-          <circle cx="60" cy="90" r="14" fill="var(--muted)"/><text x="60" y="95" text-anchor="middle" font-size="12" fill="#fff">C1</text>
-          <circle cx="140" cy="90" r="14" fill="var(--muted)"/><text x="140" y="95" text-anchor="middle" font-size="12" fill="#fff">C2</text>
-          <line x1="74" y1="84" x2="126" y2="84" class="diagram-ink" stroke-width="2.5"/>
-          <line x1="74" y1="96" x2="126" y2="96" class="diagram-ink" stroke-width="2.5"/>
-          <text x="100" y="130" text-anchor="middle" font-size="12" fill="var(--accent-2)">pick C1 &amp; C2 as anchors</text>
-          <path d="M175 90 h50" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
-          <text x="200" y="80" text-anchor="middle" font-size="11" fill="var(--muted)">double bond<tspan x="200" dy="14">opens</tspan></text>
-          <!-- repeat unit -->
-          <text x="250" y="30" font-size="13" font-weight="700" fill="currentColor">Repeat unit</text>
-          <circle cx="270" cy="90" r="12" fill="var(--muted)"/>
-          <circle cx="330" cy="90" r="12" fill="var(--muted)"/>
-          <line x1="282" y1="90" x2="318" y2="90" class="diagram-ink" stroke-width="2.5"/>
-          <line x1="258" y1="90" x2="240" y2="90" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/>
-          <line x1="342" y1="90" x2="360" y2="90" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/>
-          <path d="M375 90 h40" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
-          <!-- chain -->
-          <text x="440" y="30" font-size="13" font-weight="700" fill="currentColor">Chain × Repeats</text>
-          <g>
-            <line x1="440" y1="120" x2="740" y2="120" class="diagram-ink" stroke-width="2.5"/>
-            <circle cx="450" cy="120" r="9" fill="var(--muted)"/><circle cx="490" cy="120" r="9" fill="var(--muted)"/>
-            <circle cx="530" cy="120" r="9" fill="var(--muted)"/><circle cx="570" cy="120" r="9" fill="var(--muted)"/>
-            <circle cx="610" cy="120" r="9" fill="var(--muted)"/><circle cx="650" cy="120" r="9" fill="var(--muted)"/>
-            <circle cx="690" cy="120" r="9" fill="var(--muted)"/><circle cx="730" cy="120" r="9" fill="var(--muted)"/>
-            <line x1="470" y1="120" x2="470" y2="100" class="diagram-ink" stroke-width="2"/>
-            <line x1="550" y1="120" x2="550" y2="140" class="diagram-ink" stroke-width="2"/>
-            <line x1="630" y1="120" x2="630" y2="100" class="diagram-ink" stroke-width="2"/>
-            <line x1="710" y1="120" x2="710" y2="140" class="diagram-ink" stroke-width="2"/>
-          </g>
-          <text x="590" y="175" text-anchor="middle" font-size="12" fill="var(--muted)">side groups spiral around the backbone to avoid overlap</text>
+        <svg viewBox="0 0 760 230" role="img" aria-label="Isoprene 1,4-addition and cis/trans polyisoprene diagram">
+          <text x="20" y="28" font-size="13" font-weight="700" fill="currentColor">Isoprene</text>
+          <text x="20" y="50" font-size="12" fill="var(--muted)">C1=C2(–CH₃)–C3=C4</text>
+          <circle cx="45" cy="100" r="13" fill="var(--muted)"/><text x="45" y="104" text-anchor="middle" font-size="10" fill="#fff">C1</text>
+          <circle cx="105" cy="100" r="13" fill="var(--muted)"/><text x="105" y="104" text-anchor="middle" font-size="10" fill="#fff">C2</text>
+          <circle cx="165" cy="100" r="13" fill="var(--muted)"/><text x="165" y="104" text-anchor="middle" font-size="10" fill="#fff">C3</text>
+          <circle cx="225" cy="100" r="13" fill="var(--muted)"/><text x="225" y="104" text-anchor="middle" font-size="10" fill="#fff">C4</text>
+          <line x1="58" y1="94" x2="92" y2="94" class="diagram-ink" stroke-width="2.3"/><line x1="58" y1="106" x2="92" y2="106" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="118" y1="100" x2="152" y2="100" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="178" y1="94" x2="212" y2="94" class="diagram-ink" stroke-width="2.3"/><line x1="178" y1="106" x2="212" y2="106" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="105" y1="87" x2="105" y2="65" class="diagram-ink" stroke-width="2"/><text x="105" y="61" text-anchor="middle" font-size="11" fill="var(--muted)">CH₃</text>
+          <text x="135" y="142" text-anchor="middle" font-size="12" fill="var(--accent-2)">select terminal C1 and C4</text>
+          <path d="M255 100 h55" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
+          <text x="282" y="83" text-anchor="middle" font-size="11" fill="var(--muted)">1,4<tspan x="282" dy="13">addition</tspan></text>
+          <text x="335" y="28" font-size="13" font-weight="700" fill="currentColor">Repeat unit</text>
+          <text x="335" y="50" font-size="12" fill="var(--muted)">–C1–C2=C3–C4–</text>
+          <circle cx="345" cy="100" r="11" fill="var(--muted)"/><circle cx="395" cy="100" r="11" fill="var(--muted)"/>
+          <circle cx="445" cy="100" r="11" fill="var(--muted)"/><circle cx="495" cy="100" r="11" fill="var(--muted)"/>
+          <line x1="356" y1="100" x2="384" y2="100" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="406" y1="94" x2="434" y2="94" class="diagram-ink" stroke-width="2.3"/><line x1="406" y1="106" x2="434" y2="106" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="456" y1="100" x2="484" y2="100" class="diagram-ink" stroke-width="2.3"/>
+          <line x1="334" y1="100" x2="320" y2="100" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/><line x1="506" y1="100" x2="520" y2="100" class="diagram-ink" stroke-width="2" stroke-dasharray="3 3"/>
+          <path d="M540 100 h42" class="diagram-ink" stroke-width="2" marker-end="url(#ar2)"/>
+          <text x="605" y="28" font-size="13" font-weight="700" fill="currentColor">Choose geometry</text>
+          <rect x="598" y="62" width="64" height="30" rx="7" fill="var(--chip)" stroke="var(--accent)"/><text x="630" y="82" text-anchor="middle" font-size="12" fill="var(--accent)">Cis</text>
+          <text x="673" y="82" font-size="12" fill="var(--muted)">rubber</text>
+          <rect x="598" y="106" width="64" height="30" rx="7" class="diagram-ink"/><text x="630" y="126" text-anchor="middle" font-size="12" fill="currentColor">Trans</text>
+          <text x="673" y="126" font-size="12" fill="var(--muted)">gutta-percha</text>
+          <text x="380" y="190" text-anchor="middle" font-size="12" fill="var(--muted)">The two original double bonds become single bonds; a new C2=C3 double bond remains.</text>
           <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="currentColor"/></marker></defs>
         </svg>
-        <figcaption>Choosing the two anchor atoms opens the double bond and tiles the unit into a chain.</figcaption>
+        <figcaption>Isoprene undergoes 1,4-addition, leaving one double bond whose geometry shapes the chain.</figcaption>
       </figure>
 
       <ol class="steps">
-        <li><span class="stepnum">1</span><div><b>Open the Polymer builder.</b> Tap the <b>chain icon</b> in the bottom-left dock and choose how your polymer cures: <b>Addition cure</b> (opens a C=C double bond) or <b>Condensation cure</b> (each new bond releases one small molecule — H₂O or HCl). The scene clears so you start fresh.</div></li>
-        <li><span class="stepnum">2</span><div><b>Load a monomer.</b> Type a name or CID in the panel's <b>PubChem</b> box (try <code>ethylene</code> or <code>styrene</code> for addition, <code>lactic acid</code> for condensation) and press <b>Load</b>. Atom labels (C1, C2, O1…) turn on automatically when the builder opens, so every atom shows its name.</div></li>
-        <li><span class="stepnum">3</span><div><b>Pick the two anchor atoms.</b> <b>Anchor 1</b> and <b>Anchor 2</b> are the atoms where the chain will connect — for a vinyl monomer the two C=C carbons; for condensation an acid carbon (−COOH, or −COCl on an acyl chloride) and the −OH oxygen (or −NH₂ nitrogen). The app suggests them, but the choice is yours — a wrong pick shows an error explaining what can react. Press <b>Make repeat unit</b> to form the chain. In condensation, every new link squeezes out a little <b>water molecule that drifts away from the chain</b> (the Status panel counts them).</div></li>
-        <li><span class="stepnum">4</span><div><b>Two-monomer condensation (PET, nylon).</b> Load <code>ethylene glycol</code> into slot <b>A</b> and pick its two −OH oxygens. Tap slot <b>B</b>, load <code>terephthalic acid</code> — both molecules appear together, labelled <b>A</b> and <b>B</b>. Pick B's two −COOH carbons and press <b>Make repeat unit (combine A + B)</b> — that's PET, the plastic in drink bottles. (<code>hexamethylenediamine</code> + <code>adipic acid</code> gives nylon 6,6 releasing water; swap in <code>adipoyl chloride</code> for the classic “nylon rope trick” chemistry, where every new bond releases <b>HCl</b> instead.) The released molecules stay a teaching visual — they are not included in AR Quick Look or LAMMPS exports.</div></li>
-        <li><span class="stepnum">5</span><div><b>Set the chain length</b> with the <b>Repeats</b> slider.</div></li>
-        <li><span class="stepnum">6</span><div><b>Export for LAMMPS.</b> Press the <b>Save LAMMPS (UFF)</b> download icon in the bottom-left dock. Two files download:
+        <li><span class="stepnum">1</span><div><b>Open the Polymer builder.</b> Tap the <b>chain icon</b> and choose <b>Addition cure</b>. The Edit panel closes and the scene starts clean.</div></li>
+        <li><span class="stepnum">2</span><div><b>Load isoprene from SMILES.</b> Tap the smile icon, enter <code>C=C(C=C)C</code>, and press <b>Load</b>. This equivalent ordering keeps the four diene-backbone atoms labelled C1–C4 in the app. SMILES is case-sensitive: use uppercase <code>C</code> here; lowercase <code>c</code> means aromatic carbon. Atom labels turn on automatically.</div></li>
+        <li><span class="stepnum">3</span><div><b>Select the terminal diene anchors.</b> Choose the first and fourth backbone carbons, C1 and C4. The app recognizes the conjugated diene and applies 1,4-addition: <code>C1=C2–C3=C4</code> becomes <code>–C1–C2=C3–C4–</code>.</div></li>
+        <li><span class="stepnum">4</span><div><b>Choose Cis or Trans, then build.</b> Cis models natural rubber; Trans models gutta-percha. Press <b>Make repeat unit</b>, then adjust <b>Repeats</b>. If you change Cis/Trans afterward, the app returns to the monomer so the displayed chain cannot retain the old geometry—press <b>Make repeat unit</b> again.</div></li>
+        <li><span class="stepnum">5</span><div><b>Compare, but do not over-interpret.</b> Cis-1,4-polyisoprene is kinked and generally crystallizes less readily when unstretched; trans-1,4-polyisoprene packs and crystallizes more readily. Natural rubber can still crystallize under strain or suitable low-temperature conditions, so “cis never crystallizes” is not correct.</div></li>
+        <li><span class="stepnum">6</span><div><b>Try condensation and PET.</b> Start over and choose <b>Condensation cure</b>. Load <code>ethylene glycol</code> into slot A and select its two alcohol oxygens. Load <code>terephthalic acid</code> into slot B and select its two carboxyl carbons. The new ester bonds form between those oxygens and carbons.</div></li>
+        <li><span class="stepnum">7</span><div><b>Understand the teaching model.</b> In the simplified net esterification, the alcohol oxygen remains in the polyester linkage; the acid hydroxyl group and the alcohol hydrogen form H₂O. The floating water molecules visualize this net reaction and are excluded from AR and LAMMPS exports. Industrial PET production is more involved: initial direct esterification forms water, while later melt polycondensation commonly removes ethylene glycol.</div></li>
+        <li><span class="stepnum">8</span><div><b>Export for LAMMPS.</b> Press <b>Save LAMMPS (UFF)</b>. Two files download:
           <div style="margin-top:6px">
             <code>&lt;name&gt;.data</code> — atoms, bonds, and a self-contained UFF-style force field (no external force-field file needed).<br/>
             <code>in.relax</code> — the run script.
           </div>
         </div></li>
-        <li><span class="stepnum">7</span><div><b>Relax it.</b> Run <code>lmp -in in.relax</code>. The script does an overlap-relief warm-up → <b>FIRE</b> energy minimization → <b>NVT at 300 K for 10 ps</b>, and writes:
+        <li><span class="stepnum">9</span><div><b>Relax it.</b> Run <code>lmp -in in.relax</code>. The script does an overlap-relief warm-up → <b>FIRE</b> energy minimization → <b>NVT at 300 K for 10 ps</b>, and writes:
           <div style="margin-top:6px">
             <code>&lt;name&gt;.xyz</code> (one trajectory spanning the whole run) and <code>&lt;name&gt;.relaxed.data</code> (final structure).
           </div>
         </div></li>
       </ol>
-      <div class="callout">Keep <b>Show hydrogens</b> on before saving — the export includes every hydrogen and caps the chain ends, so the polymer is a complete molecule LAMMPS can relax. The force field is generic (UFF-style, approximate) — great for getting a reasonable geometry, not for precise energetics.</div>
+      <div class="callout"><b>Educational simulation only.</b> Keep <b>Show hydrogens</b> on before saving. The generic UFF-style model and short, isolated-chain 10 ps run are useful for visualizing geometry relaxation, but they cannot establish bulk crystallinity or provide research-quality thermodynamics, kinetics, or material properties.</div>
+
+      <h3>Learn more about the chemistry</h3>
+      <div class="card">
+        <p><a href="https://openstax.org/books/organic-chemistry/pages/21-3-reactions-of-carboxylic-acids">OpenStax: Fischer esterification</a> — mechanism and isotope-label evidence showing that the alcohol oxygen remains in the ester.</p>
+        <p><a href="https://edu.rsc.org/magnificent-molecules/polyethylene-terephthalate/2500258.article">Royal Society of Chemistry: Polyethylene terephthalate</a> — a student-friendly overview of PET, terephthalic acid, and ethylene glycol.</p>
+        <p><a href="https://www.open.edu/openlearn/science-maths-technology/chemistry/introduction-polymers/content-section-2.3.3">Open University: Geometrical isomerism in polyisoprene</a> — cis natural rubber and trans gutta-percha.</p>
+        <p><a href="https://doi.org/10.1016/0032-3861(63)90040-5">Polymer: Crystallization of gutta-percha and synthetic trans-1,4-polyisoprenes</a> — experimental crystallization literature.</p>
+      </div>
 
       <hr />
 
@@ -440,9 +460,18 @@
           <h3 style="margin-top:0">Status panel</h3>
           <p class="muted" style="margin-top:0">Tap the <b>Status</b> (info) icon for atom/bond counts, bond-order breakdown, and a valence check that flags unusual structures.</p>
         </div>
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">Loading molecules</h3>
+          <p class="muted" style="margin-top:0">Select the database icon for a PubChem name/CID or the smile icon for SMILES. If SMILES fails, check atom case, parentheses, bond symbols, and ring closures.</p>
+        </div>
+        <div class="card" style="margin:0">
+          <h3 style="margin-top:0">What the simulation proves</h3>
+          <p class="muted" style="margin-top:0">The included LAMMPS run relaxes one finite chain in vacuum. Demonstrating crystallization requires multiple chains, periodic boundaries, careful equilibration, validated force fields, and structural analysis.</p>
+        </div>
       </div>
 
       <footer>
+        <p>Polymer AR Lab is an educational demonstration and is not ready for production or research use.</p>
         <p><a href="index.html">← Back to Polymer AR Lab</a></p>
       </footer>
     </div>
